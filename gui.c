@@ -294,6 +294,10 @@ struct osdmenuitem hwopitems[] = { { " Oric-1",                "1",    SDLK_1,  
                                    { " CH376 (Telestrat)    ", NULL,   0,        togglech376, 0, 0 },
                                    { " Twilighte board    ", NULL,   0,        toggletwilighte, 0, 0 },
 //                                   { " Mouse",                 NULL,   0,        NULL,            0, 0 },
+// [- Assinie
+                                   { OSDMENUBAR,               NULL,   0,        NULL,            0, 0 },
+                                   { "Others...",              "O",   'o',       gotomenu,        8, 0 },
+// -]
                                    { OSDMENUBAR,               NULL,   0,        NULL,            0, 0 },
                                    { "Back",                   "\x17", SDLK_BACKSPACE,gotomenu,   0, 0 },
                                    { NULL, } };
@@ -391,7 +395,11 @@ struct osdmenu menus[] = { { "Main Menu",        LAST_ITEM(mainitems)-4, mainite
                            { "Video options",    LAST_ITEM(vdopitems),  vdopitems },
                            { "About Oricutron",  LAST_ITEM(aboutitems), aboutitems },
                            { "Overclock",        LAST_ITEM(ovopitems),  ovopitems },
-                           { "Keyboard options", LAST_ITEM(keopitems),  keopitems }};
+                           { "Keyboard options", LAST_ITEM(keopitems),  keopitems },
+                           // [- Assinie
+                           { "Others",          0,                     NULL}
+                           // -]
+                           };
 
 #define MKPATH_MAX (1024)
 
@@ -2443,6 +2451,9 @@ SDL_bool init_gui( struct machine *oric, Sint32 rendermode )
   if( !alloc_textzone( oric, TZ_AY,       400, 228, 30, 21, "AY Status"            ) ) return SDL_FALSE;
   if( !alloc_textzone( oric, TZ_DISK,     400, 228, 30, 21, "Disk Status"          ) ) return SDL_FALSE;
   if( !alloc_textzone( oric, TZ_TWIL,     400, 228, 30, 21, "Twilighte Status"     ) ) return SDL_FALSE;
+  // [- Assinie
+  if( !alloc_textzone( oric, TZ_PERIPH,   400, 228, 30, 21, "Assinie Periph"       ) ) return SDL_FALSE;
+  // -]
 
   // Set up SDL audio
   wanted.freq     = AUDIO_FREQ;

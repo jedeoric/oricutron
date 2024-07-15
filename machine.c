@@ -48,6 +48,10 @@
 
 #include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
 
+// [Assinie--
+#include "plugins/assinie/periph.h"
+// --]
+
 #include "machine.h"
 #include "avi.h"
 #include "filereq.h"
@@ -82,6 +86,9 @@ unsigned char rom_microdisc[8912], rom_bd500[8912], rom_jasmin[2048], rom_pravet
 struct symboltable sym_microdisc, sym_bd500, sym_jasmin, sym_pravetz;
 SDL_bool microdiscrom_valid, bd500rom_valid, jasminrom_valid, pravetzrom_valid;
 extern struct osdmenuitem mainitems[];
+
+static SDL_bool load_rom( struct machine *oric, char *fname, int size, unsigned char *where, struct symboltable *stab, int symflags );
+
 
 Uint8 oricpalette[] = { 0x00, 0x00, 0x00,
                         0xff, 0x00, 0x00,
@@ -120,6 +127,9 @@ static Uint8 ftdos_master_detect[] =
     0x8d, 0xff, 0xff, 0x8d, 0x39, 0x04, 0x8d, 0x48, 0x04, 0x8d, 0x66, 0x04, 0xa9, 0x03, 0x85, 0x02,
   };
 
+// =============================================================================
+//
+// =============================================================================
 int detect_image_type(char *filename)
 {
   FILE *f;
@@ -243,48 +253,10 @@ int detect_image_type(char *filename)
   return IMG_I_DUNNO;
 }
 
-// Switch between emulation/monitor/menus etc.
-void setemumode( struct machine *oric, struct osdmenuitem *mitem, int mode )
-{
-  oric->emu_mode = mode;
 
-  switch( mode )
-  {
-    case EM_RUNNING:
-      SDL_COMPAT_EnableKeyRepeat( 0, 0 );
-      SDL_COMPAT_EnableUNICODE( SDL_FALSE );
-      oric->ay.soundon = soundavailable && soundon && (!warpspeed);
-      if( oric->ay.soundon )
-      {
-        ay_flushlog( &oric->ay );
-        SDL_PauseAudio( 0 );
-      }
-      ula_set_dirty( oric );
-      break;
-
-    case EM_MENU:
-      if( vidcap ) avi_close( &vidcap );
-      gotomenu( oric, NULL, 0 );
-      SDL_COMPAT_EnableKeyRepeat( SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL );
-      SDL_COMPAT_EnableUNICODE( SDL_TRUE );
-      oric->ay.soundon = SDL_FALSE;
-      if( soundavailable )
-        SDL_PauseAudio( 1 );
-      break;
-#ifndef WWW_NO_MONITOR
-    case EM_DEBUG:
-      if( vidcap ) avi_close( &vidcap );
-      mon_enter( oric );
-      SDL_COMPAT_EnableKeyRepeat( SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL );
-      SDL_COMPAT_EnableUNICODE( SDL_TRUE );
-      oric->ay.soundon = SDL_FALSE;
-      if( soundavailable )
-        SDL_PauseAudio( 1 );
-      break;
-#endif
-  }
-}
-
+// =============================================================================
+//
+// =============================================================================
 void setromon( struct machine *oric )
 {
   // Determine if the ROM is currently active
@@ -309,6 +281,208 @@ void setromon( struct machine *oric )
     oric->romon = !oric->romdis;
   }
 }
+
+// =============================================================================
+//                              Main board
+// =============================================================================
+
+        // ---------------------------------------------------------------------
+        // Read
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+// Oric-1 16K CPU read
+unsigned char o16kread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
+
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
+
+    return via_read( &oric->via, addr );
+  }
+
+  if( ( !oric->romdis ) && ( addr >= 0xc000 ) )
+    return oric->rom[addr-0xc000];
+
+  return oric->mem[addr&0x3fff];
+}
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos CPU read
+unsigned char atmosread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
+
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
+
+    if( oric->twilighteboard_activated)
+    {
+      if ((0x342 <= addr  && addr < 0x344 ) || (0x320 <= addr && addr < 0x330 ))
+        return twilighteboard_oric_read(oric->twilighte,addr);
+
+      if (oric->twilighte->microdisc==SDL_TRUE)
+      {
+        if (0x310 <= addr && addr < 0x319)
+          return microdisc_read( &oric->md, addr );
+      }
+
+    }
+
+    // [Assinie] - Tests
+    // [--
+
+    if (periph_present(addr))
+        return periph_read(oric, addr);
+/*
+    if(addr==0x360)
+    {
+        printf("stack ptr: %d\n", (int) oric->stack_ptr);
+        return oric->stack[--oric->stack_ptr];
+    }
+
+    if(addr==0x361)
+    {
+        printf("read: %04x\n", addr);
+        return (unsigned char)(oric->reg_incr);
+    }
+
+    // /!\ Pour les instructions indirecte Oricutron lit d'abord l'octet MSB puis le LSB
+    //     alors que le 6502 fait le contraire
+    //     Les instructions DEEK et DOKE lisent/écrivent d'abord le MSB puis le LSB
+    if(addr==0x362)
+    {
+        printf("read: %04x\n", addr);
+        return oric->reg & 0x00ff;
+    }
+
+    if(addr==0x363)
+    {
+        unsigned char data = oric->reg >> 8;
+        printf("read: %04x\n", addr);
+        oric->reg += oric->reg_incr;
+        return data;
+    }
+    // --]
+*/
+    return via_read( &oric->via, addr );
+  }
+
+  if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) {
+
+    if (oric->twilighteboard_activated)
+      return twilighteboard_oric_ROM_RAM_read(oric->twilighte,addr-0xc000);
+    else
+      return oric->rom[addr-0xc000];
+  }
+    // [Assinie] - Tests
+    // [--
+
+    if (periph_present(addr))
+        return periph_read(oric, addr);
+
+  return oric->mem[addr];
+}
+
+                // -------------------------------------------------------------
+                // Telestrat
+                // -------------------------------------------------------------
+
+// Oric Telestrat CPU read
+unsigned char telestratread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    switch( addr & 0x0f0 )
+    {
+
+      case 0x010:
+        if( addr >= 0x31c )
+        {
+          return acia_read( &oric->tele_acia, addr );
+        }
+
+        return microdisc_read( &oric->md, addr );
+
+      case 0x020:
+        return via_read( &oric->tele_via, addr );
+
+      case 0x040:
+        if (oric->ch376_activated)
+        {
+          if (addr == 0x340 || addr == 0x341)
+            return ch376_oric_read(oric->ch376, addr);
+        }
+    }
+
+    return via_read( &oric->via, addr );
+  }
+
+  if( addr >= 0xc000 )
+  {
+//    if( oric->romdis )
+//    {
+//      if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
+//        return rom_microdisc[addr-0xe000];
+//    } else {
+      return oric->rom[addr-0xc000];
+//    }
+  }
+
+  return oric->mem[addr];
+}
+
+        // ---------------------------------------------------------------------
+        // Write
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+
+// Oric-1 16k CPU write
+void o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+  if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) return;  // Can't write to ROM!
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      acia_write( &oric->tele_acia, addr, data );
+
+    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      ch376_oric_write(oric->ch376, addr, data);
+
+    else
+      via_write( &oric->via, addr, data );
+
+    return;
+  }
+
+  oric->mem[addr&0x3fff] = data;
+}
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
 
 // Oric Atmos CPU write
 void atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
@@ -339,35 +513,47 @@ void atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
       microdisc_write( &oric->md, addr, data );
       }
 
+    // [Assinie] - Tests
+    // [--
+    else if (periph_present(addr))
+    {
+        periph_write(oric, addr, data);
+        return;
+    }
+/*
+    else if(addr==0x360)
+        oric->stack[oric->stack_ptr++] = data;
+
+    else if(addr==0x361)
+        oric->reg_incr = data;
+
+    else if(addr==0x362)
+        oric->reg = (oric->reg & 0xff00) | data;
+
+    else if(addr==0x363)
+        oric->reg = (data << 8) | (oric->reg & 0x00ff);
+    // --]
+*/
     else
       via_write( &oric->via, addr, data );
 
     return;
   }
+
+    // [Assinie] - Tests
+    // [--
+    else if (periph_present(addr))
+    {
+        periph_write(oric, addr, data);
+        return;
+    }
+
   oric->mem[addr] = data;
 }
 
-// Oric-1 16k CPU write
-void o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-  if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) return;  // Can't write to ROM!
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      acia_write( &oric->tele_acia, addr, data );
-
-    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      ch376_oric_write(oric->ch376, addr, data);
-
-    else
-      via_write( &oric->via, addr, data );
-
-    return;
-  }
-
-  oric->mem[addr&0x3fff] = data;
-}
+                // -------------------------------------------------------------
+                // Telestrat
+                // -------------------------------------------------------------
 
 // Oric Telestrat CPU write
 void telestratwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
@@ -425,8 +611,110 @@ void telestratwrite( struct m6502 *cpu, unsigned short addr, unsigned char data 
   oric->mem[addr] = data;
 }
 
-// Oric Atmos + jasmin
-void jasmin_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+// =============================================================================
+//                                      Disks
+// =============================================================================
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+void setdrivetype( struct machine *oric, struct osdmenuitem *mitem, int type )
+{
+  if( oric->drivetype == type )
+    return;
+
+  if( ( type == DRV_PRAVETZ ) &&
+      ( oric->type != MACH_PRAVETZ ) )
+  {
+    swapmach( oric, mitem, (DRV_PRAVETZ<<16)|MACH_PRAVETZ );
+    return;
+  }
+
+  shut_machine( oric );
+
+  switch( type )
+  {
+    case DRV_MICRODISC:
+    case DRV_BD500:
+    case DRV_JASMIN:
+    case DRV_PRAVETZ:
+        oric->drivetype = type;
+      break;
+
+    default:
+      oric->drivetype = DRV_NONE;
+      break;
+  }
+
+#ifndef WWW_NO_MONITOR
+  mon_state_reset( oric );
+#endif
+  if( !init_machine( oric, oric->type, SDL_FALSE ) )
+  {
+    shut( oric );
+#ifdef __ANDROID__
+    error_printf("'init_machine' failed");
+#endif
+    exit( EXIT_FAILURE );
+  }
+
+  setmenutoggles( oric );
+}
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+void load_diskroms( struct machine *oric )
+{
+  microdiscrom_valid = load_rom( oric, mdiscromfile, 8192, rom_microdisc, &sym_microdisc, SYMF_ROMDIS1|SYMF_MICRODISC );
+  bd500rom_valid     = load_rom( oric, bd500romfile, 8192, rom_bd500, &sym_bd500, SYMF_ROMDIS1|SYMF_BD500 );
+  jasminrom_valid    = load_rom( oric, jasmnromfile, 2048, rom_jasmin,    &sym_jasmin,    SYMF_ROMDIS1|SYMF_JASMIN );
+  pravetzrom_valid   = load_rom( oric, pravetzromfile[1], 512, rom_pravetz, &sym_pravetz,  SYMF_PRAVZ8D );
+}
+
+// =============================================================================
+//      No disk
+// =============================================================================
+        // ---------------------------------------------------------------------
+        // Setup
+        // ---------------------------------------------------------------------
+
+static void setup_for_no_disk( struct machine *oric, void *readptr, void *writeptr )
+{
+  oric->drivetype = DRV_NONE;
+  oric->cpu.read = readptr;
+  oric->cpu.write = writeptr;
+  oric->romdis = SDL_FALSE;
+  oric->disksyms = NULL;
+}
+
+
+// =============================================================================
+//      Jasmin
+// =============================================================================
+        // ---------------------------------------------------------------------
+        // Setup
+        // ---------------------------------------------------------------------
+
+static void setup_for_jasmin( struct machine *oric, void *readptr, void *writeptr )
+{
+  oric->cpu.read = readptr;
+  oric->cpu.write = writeptr;
+  oric->romdis = SDL_FALSE;
+  jasmin_init( &oric->jasmin, &oric->wddisk, oric );
+  oric->disksyms = &sym_jasmin;
+}
+
+        // ---------------------------------------------------------------------
+        // Read
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+// Oric 16k + jasmin
+unsigned char jasmin_o16kread( struct m6502 *cpu, unsigned short addr )
 {
   struct machine *oric = (struct machine *)cpu->userdata;
 
@@ -434,30 +722,72 @@ void jasmin_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char da
   {
     if( oric->romdis )
     {
-      if( addr >= 0xf800 ) return; // Can't write to jasmin rom
+      if( addr >= 0xf800 ) return rom_jasmin[addr-0xf800];
     } else {
-      if( addr >= 0xc000 ) return; // Can't write to BASIC rom
+      if( addr >= 0xc000 ) return oric->rom[addr-0xc000];
     }
   }
 
   if( ( addr & 0xff00 ) == 0x0300 )
   {
     if( ( addr >= 0x3f4 ) && ( addr < 0x400 ) )
-      jasmin_write( &oric->jasmin, addr, data );
+      return jasmin_read( &oric->jasmin, addr );
 
-    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      acia_write( &oric->tele_acia, addr, data );
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
 
-    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      ch376_oric_write(oric->ch376, addr, data);
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
 
-    else
-      via_write( &oric->via, addr, data );
-
-    return;
+    return via_read( &oric->via, addr );
   }
-  oric->mem[addr] = data;
+
+  return oric->mem[addr&0x3fff];
 }
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + jasmin
+unsigned char jasmin_atmosread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( oric->jasmin.olay == 0 )
+  {
+    if( oric->romdis )
+    {
+      if( addr >= 0xf800 ) return rom_jasmin[addr-0xf800];
+    } else {
+      if( addr >= 0xc000 ) return oric->rom[addr-0xc000];
+    }
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x3f4 ) && ( addr < 0x400 ) )
+      return jasmin_read( &oric->jasmin, addr );
+
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
+
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
+
+    return via_read( &oric->via, addr );
+  }
+
+  return oric->mem[addr];
+}
+
+        // ---------------------------------------------------------------------
+        // Write
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
 
 // Oric-1 16k + jasmin
 void jasmin_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
@@ -494,65 +824,143 @@ void jasmin_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char dat
   oric->mem[addr&0x3fff] = data;
 }
 
-// Oric Atmos + microdisc
-void microdisc_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + jasmin
+void jasmin_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
 {
   struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( oric->jasmin.olay == 0 )
+  {
+    if( oric->romdis )
+    {
+      if( addr >= 0xf800 ) return; // Can't write to jasmin rom
+    } else {
+      if( addr >= 0xc000 ) return; // Can't write to BASIC rom
+    }
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x3f4 ) && ( addr < 0x400 ) )
+      jasmin_write( &oric->jasmin, addr, data );
+
+    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      acia_write( &oric->tele_acia, addr, data );
+
+    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      ch376_oric_write(oric->ch376, addr, data);
+
+    else
+      via_write( &oric->via, addr, data );
+
+    return;
+  }
+  oric->mem[addr] = data;
+}
+
+// =============================================================================
+//      Microdisc
+// =============================================================================
+
+        // ---------------------------------------------------------------------
+        // Setup
+        // ---------------------------------------------------------------------
+
+static void setup_for_microdisc( struct machine *oric, void *readptr, void *writeptr )
+{
+  oric->cpu.read = readptr;
+  oric->cpu.write = writeptr;
+  oric->romdis = SDL_TRUE;
+  microdisc_init( &oric->md, &oric->wddisk, oric );
+  oric->disksyms = &sym_microdisc;
+}
+
+
+        // ---------------------------------------------------------------------
+        // Read
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+
+// Oric-1 16k + microdisc
+unsigned char microdisc_o16kread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
   if( oric->romdis )
   {
-    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) ) return; // Can't write to ROM!
+    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
+      return rom_microdisc[addr-0xe000];
   } else {
-    if( addr >= 0xc000 ) return;
+    if( addr >= 0xc000 )
+      return oric->rom[addr-0xc000];
   }
 
   if( ( addr & 0xff00 ) == 0x0300 )
   {
     if( ( addr >= 0x310 ) && ( addr < 0x31c ) )
-      microdisc_write( &oric->md, addr, data );
+      return microdisc_read( &oric->md, addr );
 
-    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      acia_write( &oric->tele_acia, addr, data );
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
 
-    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      ch376_oric_write(oric->ch376, addr, data);
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
 
-    else
-      via_write( &oric->via, addr, data );
-
-    return;
+    return via_read( &oric->via, addr );
   }
-  oric->mem[addr] = data;
+
+  return oric->mem[addr&0x3fff];
 }
 
-// Oric Atmos + bd500
-void bd500_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + microdisc
+unsigned char microdisc_atmosread( struct m6502 *cpu, unsigned short addr )
 {
   struct machine *oric = (struct machine *)cpu->userdata;
+
   if( oric->romdis )
   {
-    if( ( oric->bd.diskrom ) && ( addr >= 0xc000 ) ) return; // Can't write to ROM!
+    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
+      return rom_microdisc[addr-0xe000];
   } else {
-    if( addr >= 0xc000 ) return;
+    if( addr >= 0xc000 )
+      return oric->rom[addr-0xc000];
   }
 
   if( ( addr & 0xff00 ) == 0x0300 )
   {
-    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
-      bd500_write( &oric->bd, addr, data );
+    if( ( addr >= 0x310 ) && ( addr < 0x31c ) )
+      return microdisc_read( &oric->md, addr );
 
-    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      acia_write( &oric->tele_acia, addr, data );
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
 
-    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      ch376_oric_write(oric->ch376, addr, data);
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
 
-    else
-      via_write( &oric->via, addr, data );
-
-    return;
+    return via_read( &oric->via, addr );
   }
-  oric->mem[addr] = data;
+
+  return oric->mem[addr];
 }
+
+        // ---------------------------------------------------------------------
+        // Write
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
 
 // Oric-1 16k + microdisc
 void microdisc_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
@@ -584,6 +992,138 @@ void microdisc_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char 
   oric->mem[addr&0x3fff] = data;
 }
 
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + microdisc
+void microdisc_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+  if( oric->romdis )
+  {
+    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) ) return; // Can't write to ROM!
+  } else {
+    if( addr >= 0xc000 ) return;
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x310 ) && ( addr < 0x31c ) )
+      microdisc_write( &oric->md, addr, data );
+
+    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      acia_write( &oric->tele_acia, addr, data );
+
+    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      ch376_oric_write(oric->ch376, addr, data);
+
+    else
+      via_write( &oric->via, addr, data );
+
+    return;
+  }
+  oric->mem[addr] = data;
+}
+
+// =============================================================================
+//      bd500
+// =============================================================================
+        // ---------------------------------------------------------------------
+        // Setup
+        // ---------------------------------------------------------------------
+
+static void setup_for_bd500( struct machine *oric, void *readptr, void *writeptr )
+{
+  oric->cpu.read = readptr;
+  oric->cpu.write = writeptr;
+  oric->romdis = SDL_TRUE;
+  bd500_init( &oric->bd, &oric->wddisk, oric );
+  oric->disksyms = &sym_bd500;
+}
+
+        // ---------------------------------------------------------------------
+        // Read
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+
+// Oric-1 16k + bd500
+unsigned char bd500_o16kread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( oric->romdis )
+  {
+    if( ( oric->bd.diskrom ) && ( addr >= 0xe000 ) )
+      return rom_bd500[addr-0xe000];
+  } else {
+    if( addr >= 0xc000 )
+      return oric->rom[addr-0xc000];
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
+      return bd500_read( &oric->bd, addr );
+
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
+
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
+
+    return via_read( &oric->via, addr );
+  }
+
+  return oric->mem[addr&0x3fff];
+}
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + bd500
+unsigned char bd500_atmosread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( oric->romdis )
+  {
+    if( ( oric->bd.diskrom ) && ( addr >= 0xe000 ) )
+      return rom_bd500[addr-0xe000];
+  } else {
+    if( addr >= 0xc000 )
+      return oric->rom[addr-0xc000];
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
+      return bd500_read( &oric->bd, addr );
+
+    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      return acia_read( &oric->tele_acia, addr );
+
+    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      return ch376_oric_read(oric->ch376, addr);
+
+    return via_read( &oric->via, addr );
+  }
+
+  return oric->mem[addr];
+}
+
+        // ---------------------------------------------------------------------
+        // Write
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Oric 16K
+                // -------------------------------------------------------------
+
 // Oric-1 16k + bd500
 void bd500_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
 {
@@ -613,6 +1153,110 @@ void bd500_o16kwrite( struct m6502 *cpu, unsigned short addr, unsigned char data
   }
   oric->mem[addr&0x3fff] = data;
 }
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Oric Atmos + bd500
+void bd500_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+  if( oric->romdis )
+  {
+    if( ( oric->bd.diskrom ) && ( addr >= 0xc000 ) ) return; // Can't write to ROM!
+  } else {
+    if( addr >= 0xc000 ) return;
+  }
+
+  if( ( addr & 0xff00 ) == 0x0300 )
+  {
+    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
+      bd500_write( &oric->bd, addr, data );
+
+    else if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
+      acia_write( &oric->tele_acia, addr, data );
+
+    else if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
+      ch376_oric_write(oric->ch376, addr, data);
+
+    else
+      via_write( &oric->via, addr, data );
+
+    return;
+  }
+  oric->mem[addr] = data;
+}
+
+
+// =============================================================================
+//      Pravetz
+// =============================================================================
+        // ---------------------------------------------------------------------
+        // Setup
+        // ---------------------------------------------------------------------
+
+static void setup_for_pravetzdisk( struct machine *oric, void *readptr, void *writeptr )
+{
+  oric->cpu.read = readptr;
+  oric->cpu.write = writeptr;
+  oric->romdis = SDL_FALSE;
+  pravetz_init( &oric->pravetz, oric );
+  oric->disksyms = &sym_pravetz;
+}
+
+        // ---------------------------------------------------------------------
+        // Read
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
+
+// Pravetz
+unsigned char pravetz_atmosread( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( 0x300 == ( addr & 0xfff0 ) )
+  {
+    return via_read( &oric->via, addr );
+  }
+
+  if( 0x310 == ( addr & 0xfff0 ) )
+  {
+    if( oric->aciabackend && oric->pravetz.extension == 0x100 )
+      return acia_read( &oric->tele_acia, addr );
+    else
+      return pravetz_read( &oric->pravetz, addr );
+  }
+
+  if( 0x320 <= addr && addr <= 0x3ff )
+  {
+    if( pravetzrom_valid )
+    {
+      return rom_pravetz[addr - 0x300 + oric->pravetz.extension];
+    }
+  }
+
+  if( 0xc000 <= addr      /* 0xFFFF */)
+  {
+    if( !oric->pravetz.olay )
+    {
+      return oric->rom[addr-0xc000];
+    }
+  }
+
+  return oric->mem[addr];
+}
+
+        // ---------------------------------------------------------------------
+        // Write
+        // ---------------------------------------------------------------------
+
+                // -------------------------------------------------------------
+                // Atmos
+                // -------------------------------------------------------------
 
 // Pravetz
 void pravetz_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data )
@@ -670,6 +1314,71 @@ void pravetz_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char d
   }
 }
 
+// =============================================================================
+//                                      Lightpen
+// =============================================================================
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+/* Wrapper for the above when lightpen is enabled */
+unsigned char lightpen_read( struct m6502 *cpu, unsigned short addr )
+{
+  struct machine *oric = (struct machine *)cpu->userdata;
+
+  if( addr == 0x3e0 ) return oric->lightpenx;
+  if( addr == 0x3e1 ) return oric->lightpeny;
+
+  return oric->read_not_lightpen( cpu, addr );
+}
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+static SDL_bool lightpendown = SDL_FALSE;
+void move_lightpen( struct machine *oric, int x, int y )
+{
+  if (!lightpendown) return;
+
+  if ((oric->rendermode == RENDERMODE_SW) || (!oric->hstretch))
+  {
+    x = (x-80)/2;
+    if(oric->rendermode == RENDERMODE_GL && oric->aratio && oric->vid_freq)
+    {
+      y = (y-48)/2;
+    }
+    else
+    {
+      y = (y-14)/2;
+    }
+  }
+  else
+  {
+    x = ((double)x)/(640.0f/240.0f);
+    y = (y-14)/2;
+  }
+
+  if ((x>=0) && (x<240) && (y>=0) && (y<224))
+  {
+    if (oric->scr[y*240+x] != 0)
+    {
+      oric->lightpenx = (x+219)&0xff;
+      oric->lightpeny = (y+54)&0xff;
+    }
+  }
+}
+
+
+// =============================================================================
+//
+// =============================================================================
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
 // VIA is returned as RAM since it isn't ROM
 SDL_bool isram( struct machine *oric, unsigned short addr )
 {
@@ -708,349 +1417,40 @@ SDL_bool isram( struct machine *oric, unsigned short addr )
   return SDL_TRUE;
 }
 
-// Oric Atmos CPU read
-unsigned char atmosread( struct m6502 *cpu, unsigned short addr )
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+void blank_ram( Sint32 how, Uint8 *mem, Uint32 size )
 {
-  struct machine *oric = (struct machine *)cpu->userdata;
+  Uint32 i, j;
 
-  if( ( addr & 0xff00 ) == 0x0300 )
+  switch( how )
   {
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    if( oric->twilighteboard_activated)
-    {
-      if ((0x342 <= addr  && addr < 0x344 ) || (0x320 <= addr && addr < 0x330 ))
-        return twilighteboard_oric_read(oric->twilighte,addr);
-
-      if (oric->twilighte->microdisc==SDL_TRUE)
+    case 0:
+      for( i=0; i<size; i+=256 )
       {
-        if (0x310 <= addr && addr < 0x319)
-          return microdisc_read( &oric->md, addr );
+        for( j=0; j<128; j++ )
+        {
+          mem[i+j    ] = 0;
+          mem[i+j+128] = 255;
+        }
       }
+      break;
 
-    }
-
-    return via_read( &oric->via, addr );
+    default:
+      for( i=0; i<size; i+=2 )
+      {
+        mem[i  ] = 0xff;
+        mem[i+1] = 0x00;
+      }
+      break;
   }
-
-  if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) {
-
-    if (oric->twilighteboard_activated)
-      return twilighteboard_oric_ROM_RAM_read(oric->twilighte,addr-0xc000);
-    else
-      return oric->rom[addr-0xc000];
-  }
-  return oric->mem[addr];
 }
 
-// Oric-1 16K CPU read
-unsigned char o16kread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  if( ( !oric->romdis ) && ( addr >= 0xc000 ) )
-    return oric->rom[addr-0xc000];
-
-  return oric->mem[addr&0x3fff];
-}
-
-// Oric Telestrat CPU read
-unsigned char telestratread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    switch( addr & 0x0f0 )
-    {
-
-      case 0x010:
-        if( addr >= 0x31c )
-        {
-          return acia_read( &oric->tele_acia, addr );
-        }
-
-        return microdisc_read( &oric->md, addr );
-
-      case 0x020:
-        return via_read( &oric->tele_via, addr );
-
-      case 0x040:
-        if (oric->ch376_activated)
-        {
-          if (addr == 0x340 || addr == 0x341)
-            return ch376_oric_read(oric->ch376, addr);
-        }
-    }
-
-    return via_read( &oric->via, addr );
-  }
-
-  if( addr >= 0xc000 )
-  {
-//    if( oric->romdis )
-//    {
-//      if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
-//        return rom_microdisc[addr-0xe000];
-//    } else {
-      return oric->rom[addr-0xc000];
-//    }
-  }
-
-  return oric->mem[addr];
-}
-
-// Oric Atmos + jasmin
-unsigned char jasmin_atmosread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->jasmin.olay == 0 )
-  {
-    if( oric->romdis )
-    {
-      if( addr >= 0xf800 ) return rom_jasmin[addr-0xf800];
-    } else {
-      if( addr >= 0xc000 ) return oric->rom[addr-0xc000];
-    }
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x3f4 ) && ( addr < 0x400 ) )
-      return jasmin_read( &oric->jasmin, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr];
-}
-
-// Oric 16k + jasmin
-unsigned char jasmin_o16kread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->jasmin.olay == 0 )
-  {
-    if( oric->romdis )
-    {
-      if( addr >= 0xf800 ) return rom_jasmin[addr-0xf800];
-    } else {
-      if( addr >= 0xc000 ) return oric->rom[addr-0xc000];
-    }
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x3f4 ) && ( addr < 0x400 ) )
-      return jasmin_read( &oric->jasmin, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr&0x3fff];
-}
-
-// Oric Atmos + microdisc
-unsigned char microdisc_atmosread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->romdis )
-  {
-    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
-      return rom_microdisc[addr-0xe000];
-  } else {
-    if( addr >= 0xc000 )
-      return oric->rom[addr-0xc000];
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x310 ) && ( addr < 0x31c ) )
-      return microdisc_read( &oric->md, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr];
-}
-
-// Oric Atmos + bd500
-unsigned char bd500_atmosread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->romdis )
-  {
-    if( ( oric->bd.diskrom ) && ( addr >= 0xe000 ) )
-      return rom_bd500[addr-0xe000];
-  } else {
-    if( addr >= 0xc000 )
-      return oric->rom[addr-0xc000];
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
-      return bd500_read( &oric->bd, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr];
-}
-
-// Oric-1 16k + microdisc
-unsigned char microdisc_o16kread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->romdis )
-  {
-    if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) )
-      return rom_microdisc[addr-0xe000];
-  } else {
-    if( addr >= 0xc000 )
-      return oric->rom[addr-0xc000];
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x310 ) && ( addr < 0x31c ) )
-      return microdisc_read( &oric->md, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr&0x3fff];
-}
-
-// Oric-1 16k + bd500
-unsigned char bd500_o16kread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( oric->romdis )
-  {
-    if( ( oric->bd.diskrom ) && ( addr >= 0xe000 ) )
-      return rom_bd500[addr-0xe000];
-  } else {
-    if( addr >= 0xc000 )
-      return oric->rom[addr-0xc000];
-  }
-
-  if( ( addr & 0xff00 ) == 0x0300 )
-  {
-    if( ( addr >= 0x310 ) && ( addr < 0x324 ) )
-      return bd500_read( &oric->bd, addr );
-
-    if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
-      return acia_read( &oric->tele_acia, addr );
-
-    if( oric->ch376_activated && ( 0x340 <= addr ) && ( addr < 0x342 ) )
-      return ch376_oric_read(oric->ch376, addr);
-
-    return via_read( &oric->via, addr );
-  }
-
-  return oric->mem[addr&0x3fff];
-}
-
-// Pravetz
-unsigned char pravetz_atmosread( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( 0x300 == ( addr & 0xfff0 ) )
-  {
-    return via_read( &oric->via, addr );
-  }
-
-  if( 0x310 == ( addr & 0xfff0 ) )
-  {
-    if( oric->aciabackend && oric->pravetz.extension == 0x100 )
-      return acia_read( &oric->tele_acia, addr );
-    else
-      return pravetz_read( &oric->pravetz, addr );
-  }
-
-  if( 0x320 <= addr && addr <= 0x3ff )
-  {
-    if( pravetzrom_valid )
-    {
-      return rom_pravetz[addr - 0x300 + oric->pravetz.extension];
-    }
-  }
-
-  if( 0xc000 <= addr      /* 0xFFFF */)
-  {
-    if( !oric->pravetz.olay )
-    {
-      return oric->rom[addr-0xc000];
-    }
-  }
-
-  return oric->mem[addr];
-}
-
-/* Wrapper for the above when lightpen is enabled */
-unsigned char lightpen_read( struct m6502 *cpu, unsigned short addr )
-{
-  struct machine *oric = (struct machine *)cpu->userdata;
-
-  if( addr == 0x3e0 ) return oric->lightpenx;
-  if( addr == 0x3e1 ) return oric->lightpeny;
-
-  return oric->read_not_lightpen( cpu, addr );
-}
-
+// =============================================================================
+//
+// =============================================================================
 static SDL_bool load_rom( struct machine *oric, char *fname, int size, unsigned char *where, struct symboltable *stab, int symflags )
 {
   SDL_RWops *f;
@@ -1106,6 +1506,256 @@ static SDL_bool load_rom( struct machine *oric, char *fname, int size, unsigned 
   return SDL_TRUE;
 }
 
+// =============================================================================
+//
+// =============================================================================
+// This is currently used to workaround a change in the behaviour of SDL
+// on OS4, but in future it would be a handy place to fix keyboard layout
+// issues, such as the problems with a non-uk keymap on linux.
+// Also helps German keymap on MorphOS.
+int mapkey( struct machine *oric, int key )
+{
+  switch( key )
+  {
+#if defined(__amigaos4__) || defined(__MORPHOS__) || defined(__AROS__)
+    case '\xF6':
+    case ':': return ';';
+    case '<': return ',';
+    case '>': return '.';
+    case '\xDF':
+    case '?': return '/';
+    case '@':
+    case '#':
+    case '~': return '\'';
+    case '_': return '-';
+    case '+': return '=';
+    case '\xE4':
+    case '{': return '[';
+    case '\xFC':
+    case '}': return ']';
+    case '^': return '\\';
+#elif defined(WIN32)
+    case '<': return '\\';
+#endif
+  }
+
+  if (oric->keyboard_mapping.nb_map != 0) {
+    int i;
+    for(i=0; i < oric->keyboard_mapping.nb_map; i++) {
+       if (key == oric->keyboard_mapping.host_keys[i])
+           return oric->keyboard_mapping.oric_keys[i];
+    }
+  }
+
+  return key;
+}
+
+
+// =============================================================================
+//                                      Patches
+// =============================================================================
+static char *keymapnames[] = { "qwerty",
+                               "azerty",
+                               "qwertz",
+                               NULL };
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+static Uint8 hex2bin(char c)
+{
+  return ( ('0' <= c && c <= '9')? (c - '0') : (10 + (toupper(c) - 'A')) );
+}
+
+static Uint8 hex2byte(char* s)
+{
+  return hex2bin(s[0]) * 16 + hex2bin(s[1]);
+}
+
+static SDL_bool ishexchar(char c)
+{
+  if('0' <= c && c <= '9')
+    return SDL_TRUE;
+
+  c = toupper(c);
+  if('A' <= c && c <= 'F')
+    return SDL_TRUE;
+
+  return SDL_FALSE;
+}
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+void clear_patches( struct machine *oric )
+{
+  oric->pch_fd_cload_getname_pc        = -1;
+  oric->pch_fd_csave_getname_pc        = -1;
+  oric->pch_fd_store_getname_pc        = -1;
+  oric->pch_fd_recall_getname_pc       = -1;
+  oric->pch_fd_getname_addr            = -1;
+  oric->pch_fd_available               = SDL_FALSE;
+
+  oric->pch_tt_getsync_pc              = -1;
+  oric->pch_tt_getsync_end_pc          = -1;
+  oric->pch_tt_getsync_loop_pc         = -1;
+  oric->pch_tt_readbyte_pc             = -1;
+  oric->pch_tt_readbyte_end_pc         = -1;
+  oric->pch_tt_readbyte_storebyte_addr = -1;
+  oric->pch_tt_readbyte_storezero_addr = -1;
+  oric->pch_tt_putbyte_pc              = -1;
+  oric->pch_tt_putbyte_end_pc          = -1;
+  oric->pch_tt_csave_end_pc            = -1;
+  oric->pch_tt_store_end_pc            = -1;
+  oric->pch_tt_available               = SDL_FALSE;
+  oric->pch_tt_save_available          = SDL_FALSE;
+
+  oric->keymap = KMAP_QWERTY;
+}
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
+
+void load_patches( struct machine *oric, char *fname )
+{
+  FILE *f;
+  Sint32 i;
+  char *tmpname;
+
+  // MinGW doesn't have asprintf :-(
+  tmpname = malloc( strlen( fname ) + 10 );
+  if( !tmpname ) return;
+
+  sprintf( tmpname, "%s.pch", fname );
+
+  f = fopen( tmpname, "r" );
+  free( tmpname );
+  if( !f ) return;
+
+  while( !feof( f ) )
+  {
+    if( !fgets( filetmp, 2048, f ) ) break;
+
+    for( i=0; isws( filetmp[i] ); i++ ) ;
+
+    if( read_config_int(    &filetmp[i], "fd_cload_getname_pc",        &oric->pch_fd_cload_getname_pc, 0, 65535 ) )        continue;
+    if( read_config_int(    &filetmp[i], "fd_csave_getname_pc",        &oric->pch_fd_csave_getname_pc, 0, 65535 ) )        continue;
+    if( read_config_int(    &filetmp[i], "fd_store_getname_pc",        &oric->pch_fd_store_getname_pc, 0, 65535 ) )        continue;
+    if( read_config_int(    &filetmp[i], "fd_recall_getname_pc",       &oric->pch_fd_recall_getname_pc, 0, 65535 ) )       continue;
+    if( read_config_int(    &filetmp[i], "fd_getname_addr",            &oric->pch_fd_getname_addr, 0, 65535 ) )            continue;
+    if( read_config_int(    &filetmp[i], "tt_getsync_pc",              &oric->pch_tt_getsync_pc, 0, 65535 ) )              continue;
+    if( read_config_int(    &filetmp[i], "tt_getsync_end_pc",          &oric->pch_tt_getsync_end_pc, 0, 65535 ) )          continue;
+    if( read_config_int(    &filetmp[i], "tt_getsync_loop_pc",         &oric->pch_tt_getsync_loop_pc, 0, 65535 ) )         continue;
+    if( read_config_int(    &filetmp[i], "tt_readbyte_pc",             &oric->pch_tt_readbyte_pc, 0, 65535 ) )             continue;
+    if( read_config_int(    &filetmp[i], "tt_readbyte_end_pc",         &oric->pch_tt_readbyte_end_pc, 0, 65535 ) )         continue;
+    if( read_config_int(    &filetmp[i], "tt_readbyte_storebyte_addr", &oric->pch_tt_readbyte_storebyte_addr, 0, 65535 ) ) continue;
+    if( read_config_int(    &filetmp[i], "tt_readbyte_storezero_addr", &oric->pch_tt_readbyte_storezero_addr, 0, 65535 ) ) continue;
+    if( read_config_bool(   &filetmp[i], "tt_readbyte_setcarry",       &oric->pch_tt_readbyte_setcarry ) )                 continue;
+    if( read_config_int(    &filetmp[i], "tt_putbyte_pc",              &oric->pch_tt_putbyte_pc, 0, 65535 ) )              continue;
+    if( read_config_int(    &filetmp[i], "tt_putbyte_end_pc",          &oric->pch_tt_putbyte_end_pc, 0, 65535 ) )          continue;
+    if( read_config_int(    &filetmp[i], "tt_csave_end_pc",            &oric->pch_tt_csave_end_pc, 0, 65535 ) )            continue;
+    if( read_config_int(    &filetmp[i], "tt_store_end_pc",            &oric->pch_tt_store_end_pc, 0, 65535 ) )            continue;
+    if( read_config_int(    &filetmp[i], "tt_writeleader_pc",          &oric->pch_tt_writeleader_pc, 0, 65535 ) )          continue;
+    if( read_config_int(    &filetmp[i], "tt_writeleader_end_pc",      &oric->pch_tt_writeleader_end_pc, 0, 65535 ) )      continue;
+    if( read_config_option( &filetmp[i], "keymap",                     &oric->keymap, keymapnames ) )                      continue;
+
+    /*
+     * parse real patch line formated as:
+     * $xxxx:00112233445566778899AABBCCDDEEFF
+     */
+
+    // atleast address and 1 byte required
+    if(8 <= strlen(&filetmp[i]) && ';' != filetmp[i])
+    {
+      char* ptmp = &filetmp[i];
+      // check for reserved symbols
+      if(ptmp[0]=='$' && ptmp[5]==':')
+      {
+        // validate hex notation
+        if(ishexchar(ptmp[1]) && ishexchar(ptmp[2]) && ishexchar(ptmp[3]) && ishexchar(ptmp[4]))
+        {
+          Uint16 patchaddr = hex2byte(ptmp+1) * 256 + hex2byte(ptmp+3);
+          ptmp += 6;
+          while(ishexchar(ptmp[0]) && ishexchar(ptmp[1]))
+          {
+            Uint8 patchbyte = hex2byte(ptmp);
+            // printf("patching %.4X:%.2X\n", patchaddr, patchbyte);
+            oric->rom[patchaddr] = patchbyte ;
+            patchaddr++;
+            ptmp += 2;
+          }
+        }
+      }
+    }
+
+  }
+
+  fclose( f );
+
+  // Got all the addresses needed for each patch?
+  if( ( ( oric->pch_fd_cload_getname_pc != -1 ) ||
+        ( oric->pch_fd_csave_getname_pc != -1 ) ||
+        ( oric->pch_fd_store_getname_pc != -1 ) ||
+        ( oric->pch_fd_recall_getname_pc != -1 ) ) &&
+      ( oric->pch_fd_getname_addr != -1 ) )
+    oric->pch_fd_available = SDL_TRUE;
+
+  if( ( oric->pch_tt_getsync_pc != -1 ) &&
+      ( oric->pch_tt_getsync_end_pc != -1 ) &&
+      ( oric->pch_tt_getsync_loop_pc != -1 ) &&
+      ( oric->pch_tt_readbyte_pc != -1 ) &&
+      ( oric->pch_tt_readbyte_end_pc != -1 ) )
+    oric->pch_tt_available = SDL_TRUE;
+
+  if( ( oric->pch_tt_putbyte_pc != -1 ) &&
+      ( oric->pch_tt_putbyte_end_pc != -1 ) )
+    oric->pch_tt_save_available = SDL_TRUE;
+}
+
+// =============================================================================
+//
+// =============================================================================
+void swapmach( struct machine *oric, struct osdmenuitem *mitem, int which )
+{
+  int curr_drivetype;
+
+  curr_drivetype = oric->drivetype;
+
+  shut_machine( oric );
+
+  if( ((which>>16)&0xffff) != 0xffff )
+    curr_drivetype = (which>>16)&0xffff;
+
+  which &= 0xffff;
+
+  oric->drivetype = curr_drivetype;
+
+  /* The contents of the disk panel depend on the disk type. */
+  /* Wipe it to prevent garbage. */
+  clear_textzone( oric, TZ_DISK );
+
+#ifndef WWW_NO_MONITOR
+  mon_state_reset( oric );
+#endif
+  if( !init_machine( oric, which, which!=oric->type ) )
+  {
+    shut( oric );
+#ifdef __ANDROID__
+    error_printf("'init_machine' failed");
+#endif
+    exit( EXIT_FAILURE );
+  }
+}
+
+// =============================================================================
+//                              Machine
+// =============================================================================
+
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
 void preinit_machine( struct machine *oric )
 {
   int i;
@@ -1214,607 +1864,18 @@ void preinit_machine( struct machine *oric )
   oric->disable_menuscheme = SDL_FALSE;
 
   oric->pravdiskautoboot = SDL_TRUE;
+
+  //[- Assinie
+  // oric->stack_ptr = (unsigned char) 0;
+  // Ajoute les périphériques de test
+  periph_test(oric);
+  periph_list();
+  // -]
 }
 
-void load_diskroms( struct machine *oric )
-{
-  microdiscrom_valid = load_rom( oric, mdiscromfile, 8192, rom_microdisc, &sym_microdisc, SYMF_ROMDIS1|SYMF_MICRODISC );
-  bd500rom_valid     = load_rom( oric, bd500romfile, 8192, rom_bd500, &sym_bd500, SYMF_ROMDIS1|SYMF_BD500 );
-  jasminrom_valid    = load_rom( oric, jasmnromfile, 2048, rom_jasmin,    &sym_jasmin,    SYMF_ROMDIS1|SYMF_JASMIN );
-  pravetzrom_valid   = load_rom( oric, pravetzromfile[1], 512, rom_pravetz, &sym_pravetz,  SYMF_PRAVZ8D );
-}
-
-// This is currently used to workaround a change in the behaviour of SDL
-// on OS4, but in future it would be a handy place to fix keyboard layout
-// issues, such as the problems with a non-uk keymap on linux.
-// Also helps German keymap on MorphOS.
-int mapkey( struct machine *oric, int key )
-{
-  switch( key )
-  {
-#if defined(__amigaos4__) || defined(__MORPHOS__) || defined(__AROS__)
-    case '\xF6':
-    case ':': return ';';
-    case '<': return ',';
-    case '>': return '.';
-    case '\xDF':
-    case '?': return '/';
-    case '@':
-    case '#':
-    case '~': return '\'';
-    case '_': return '-';
-    case '+': return '=';
-    case '\xE4':
-    case '{': return '[';
-    case '\xFC':
-    case '}': return ']';
-    case '^': return '\\';
-#elif defined(WIN32)
-    case '<': return '\\';
-#endif
-  }
-
-  if (oric->keyboard_mapping.nb_map != 0) {
-    int i;
-    for(i=0; i < oric->keyboard_mapping.nb_map; i++) {
-       if (key == oric->keyboard_mapping.host_keys[i])
-           return oric->keyboard_mapping.oric_keys[i];
-    }
-  }
-
-  return key;
-}
-
-static SDL_bool lightpendown = SDL_FALSE;
-void move_lightpen( struct machine *oric, int x, int y )
-{
-  if (!lightpendown) return;
-
-  if ((oric->rendermode == RENDERMODE_SW) || (!oric->hstretch))
-  {
-    x = (x-80)/2;
-    if(oric->rendermode == RENDERMODE_GL && oric->aratio && oric->vid_freq)
-    {
-      y = (y-48)/2;
-    }
-    else
-    {
-      y = (y-14)/2;
-    }
-  }
-  else
-  {
-    x = ((double)x)/(640.0f/240.0f);
-    y = (y-14)/2;
-  }
-
-  if ((x>=0) && (x<240) && (y>=0) && (y<224))
-  {
-    if (oric->scr[y*240+x] != 0)
-    {
-      oric->lightpenx = (x+219)&0xff;
-      oric->lightpeny = (y+54)&0xff;
-    }
-  }
-}
-
-static SDL_bool shifted = SDL_FALSE;
-SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
-{
-  Sint32 i;
-
-  if( joy_filter_event( ev, oric ) )
-    return SDL_FALSE;
-
-//  char stmp[32];
-  switch( ev->type )
-  {
-    case SDL_MOUSEBUTTONDOWN:
-      switch (ev->button.button)
-      {
-        case SDL_BUTTON_LEFT:
-          lightpendown = SDL_TRUE;
-          move_lightpen( oric, ev->button.x, ev->button.y );
-          break;
-
-        case SDL_BUTTON_RIGHT:
-          setemumode( oric, NULL, EM_MENU );
-          *needrender = SDL_TRUE;
-          break;
-      }
-      break;
-    case SDL_MOUSEBUTTONUP:
-      if( ev->button.button == SDL_BUTTON_LEFT )
-        lightpendown = SDL_FALSE;
-      break;
-
-    case SDL_MOUSEMOTION:
-      move_lightpen( oric, ev->motion.x, ev->motion.y );
-      break;
-
-#ifdef WWW
-    case SDL_MULTIGESTURE:
-      {
-        SDL_MultiGestureEvent *m = (SDL_MultiGestureEvent*)ev;
-        if (m->numFingers == 2)
-        {
-          setemumode( oric, NULL, EM_MENU );
-          *needrender = SDL_TRUE;
-        }
-        break;
-      }
-#endif
-
-      case SDL_KEYUP:
-      switch( ev->key.keysym.sym )
-      {
-        case SDLK_F1:
-          setemumode( oric, NULL, EM_MENU );
-          *needrender = SDL_TRUE;
-          break;
-
-        case SDLK_F2:
-          setemumode( oric, NULL, EM_DEBUG );
-          *needrender = SDL_TRUE;
-          break;
-
-        case SDLK_F3:
-          softresetoric(oric, NULL, 0);
-          break;
-
-        case SDLK_F4:
-          if( ( shifted ) && ( oric->drivetype == DRV_JASMIN ) )
-          {
-            // ROMDIS
-            oric->cpu.write( &oric->cpu, 0x3fb, 1 );
-          }
-          if( oric->drivetype == DRV_MICRODISC )
-          {
-            oric->romdis = SDL_TRUE;
-            microdisc_init( &oric->md, &oric->wddisk, oric );
-          }
-          else if( oric->drivetype == DRV_BD500 )
-          {
-            oric->romdis = SDL_TRUE;
-            bd500_init( &oric->bd, &oric->wddisk, oric );
-          }
-          else if( oric->drivetype == DRV_PRAVETZ )
-          {
-            oric->pravetz.olay = 0;
-            oric->pravetz.romdis = 1;
-            oric->pravetz.extension = 0;
-            oric->romdis = !oric->pravetz.romdis;
-          }
-          setromon( oric );
-          m6502_reset( &oric->cpu );
-          via_init( &oric->via, oric, VIA_MAIN );
-          via_init( &oric->tele_via, oric, VIA_TELESTRAT );
-          acia_init( &oric->tele_acia, oric );
-
-          if (oric->twilighteboard_activated)
-          {
-            oric->ch376_activated=SDL_TRUE;
-            oric->twilighte=twilighte_oric_init();
-            if (oric->twilighte->microdisc==SDL_TRUE)
-            {
-              oric->drivetype = DRV_MICRODISC;
-              oric->disksyms = NULL;
-              microdisc_init( &oric->md, &oric->wddisk, oric );
-            }
-          }
-
-          if (oric->twilighte==NULL)
-          {
-            oric->twilighteboard_activated=SDL_FALSE;
-          }
-          else
-            oric->ch376_activated=SDL_TRUE;
-
-          if (oric->ch376_activated)
-          {
-            oric->ch376 = ch376_oric_init();
-            if (oric->ch376 != NULL)
-              ch376_oric_config(oric->ch376);
-          }
-          break;
-
-        case SDLK_F5:
-          oric->statusbar_mode = (oric->statusbar_mode+1) % STATUSBARMODE_LAST;
-          refreshstatus = SDL_TRUE;
-          oric->statusstr[0] = 0;
-          oric->newstatusstr = SDL_TRUE;
-          break;
-
-        case SDLK_F6:
-          warpspeed = ( vidcap || warpspeed )? SDL_FALSE : SDL_TRUE;
-
-          if( soundavailable && soundon )
-          {
-            ay_flushlog( &oric->ay );
-            oric->ay.soundon = !warpspeed;
-            SDL_PauseAudio( warpspeed );
-          }
-          break;
-
-        case SDLK_F7:
-          if( oric->drivetype == DRV_NONE ) break;
-
-          for( i=0; i<4; i++ )
-          {
-            if( ( oric->wddisk.disk[i] ) && ( oric->wddisk.disk[i]->modified ) )
-            {
-              if( shifted )
-              {
-                char frname[64];
-                char *dpath, *dfile;
-
-                if( oric->type != MACH_TELESTRAT )
-                {
-                  switch (oric->drivetype)
-                  {
-                    case DRV_PRAVETZ:
-                      dpath = pravdiskpath;
-                      dfile = pravdiskfile;
-                      break;
-
-                    default:
-                      dpath = diskpath;
-                      dfile = diskfile;
-                      break;
-                  }
-                } else {
-                  dpath = telediskpath;
-                  dfile = telediskfile;
-                }
-
-                sprintf( frname, "Save disk %d", i );
-                if( filerequester( oric, frname, dpath, dfile, FR_DISKSAVE ) )
-                {
-                  joinpath( dpath, dfile );
-                  diskimage_save( oric, filetmp, i );
-                }
-              } else {
-                diskimage_save( oric, oric->wddisk.disk[i]->filename, i );
-              }
-            }
-          }
-          break;
-
-        case SDLK_F8:
-          togglefullscreen( oric, NULL, 0 );
-          break;
-
-        case SDLK_F9:
-          toggletapecap( oric, find_item_by_function(mainitems, toggletapecap), 0 );
-          break;
-
-        case SDLK_F10:
-#ifndef __ANDROID__
-           if( vidcap )
-           {
-             ay_lockaudio( &oric->ay );
-             avi_close( &vidcap );
-             ay_unlockaudio( &oric->ay );
-             do_popup( oric, "AVI capture stopped" );
-             refreshavi = SDL_TRUE;
-             break;
-           }
-
-           sprintf( vidcapname, "Capturing to video%02d.avi", vidcapcount );
-           warpspeed = SDL_FALSE;
-           ay_lockaudio( &oric->ay );
-           vidcap = avi_open( &vidcapname[13], oricpalette, soundavailable&&soundon, oric->vid_freq );
-           ay_unlockaudio( &oric->ay );
-           if( vidcap )
-           {
-             vidcapcount++;
-             do_popup( oric, vidcapname );
-           }
-           refreshavi = SDL_TRUE;
-#else
-           android_togglekeyboard( oric );
-#endif
-           break;
-#ifdef __CBCOPY__
-        case SDLK_F11:
-          clipboard_copy( oric );
-          break;
-#endif
-#ifdef __CBPASTE__
-        case SDLK_F12:
-          clipboard_paste( oric );
-          break;
-#endif
-
-#ifdef __amigaos4__
-        case SDLK_HELP:
-           IDOS->SystemTags( "Multiview Oricutron.guide",
-             SYS_Input, IDOS->Open( "NIL:", MODE_NEWFILE ),
-             SYS_Output, IDOS->Open( "NIL:", MODE_NEWFILE ),
-             SYS_Asynch, TRUE,
-             TAG_DONE );
-           break;
-#endif
-
-#ifdef __MORPHOS__
-        case SDLK_HELP:
-           {
-           struct NewAmigaGuide nag =
-           { (BPTR) NULL,
-             "Oricutron.guide",
-             NULL,
-             NULL,
-             NULL,
-             NULL,
-             NULL,
-             0,
-             NULL,
-             "MAIN",
-             0,
-             NULL,
-             NULL
-           };
-
-           OpenAmigaGuide(&nag, TAG_DONE);
-           }
-           break;
-#endif
-
-        case SDLK_PRINT:
-          sprintf( screencapname, "Capturing to screenshot%02d.bmp", screencapcount );
-          screencapcount++;
-          do_popup( oric, screencapname );
-          SDL_COMPAT_TakeScreenshot( &screencapname[13] );
-          break;
-
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:
-          shifted = SDL_FALSE;
-
-        default:
-          ay_keypress( &oric->ay, mapkey( oric, ev->key.keysym.sym ), SDL_FALSE );
-          break;
-      }
-      break;
-
-    case SDL_KEYDOWN:
-      switch( ev->key.keysym.sym )
-      {
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:
-          shifted = SDL_TRUE;
-
-        default:
-          ay_keypress( &oric->ay, mapkey( oric, ev->key.keysym.sym ), SDL_TRUE );
-          break;
-      }
-      break;
-  }
-
-  return SDL_FALSE;
-}
-
-void blank_ram( Sint32 how, Uint8 *mem, Uint32 size )
-{
-  Uint32 i, j;
-
-  switch( how )
-  {
-    case 0:
-      for( i=0; i<size; i+=256 )
-      {
-        for( j=0; j<128; j++ )
-        {
-          mem[i+j    ] = 0;
-          mem[i+j+128] = 255;
-        }
-      }
-      break;
-
-    default:
-      for( i=0; i<size; i+=2 )
-      {
-        mem[i  ] = 0xff;
-        mem[i+1] = 0x00;
-      }
-      break;
-  }
-}
-
-void clear_patches( struct machine *oric )
-{
-  oric->pch_fd_cload_getname_pc        = -1;
-  oric->pch_fd_csave_getname_pc        = -1;
-  oric->pch_fd_store_getname_pc        = -1;
-  oric->pch_fd_recall_getname_pc       = -1;
-  oric->pch_fd_getname_addr            = -1;
-  oric->pch_fd_available               = SDL_FALSE;
-
-  oric->pch_tt_getsync_pc              = -1;
-  oric->pch_tt_getsync_end_pc          = -1;
-  oric->pch_tt_getsync_loop_pc         = -1;
-  oric->pch_tt_readbyte_pc             = -1;
-  oric->pch_tt_readbyte_end_pc         = -1;
-  oric->pch_tt_readbyte_storebyte_addr = -1;
-  oric->pch_tt_readbyte_storezero_addr = -1;
-  oric->pch_tt_putbyte_pc              = -1;
-  oric->pch_tt_putbyte_end_pc          = -1;
-  oric->pch_tt_csave_end_pc            = -1;
-  oric->pch_tt_store_end_pc            = -1;
-  oric->pch_tt_available               = SDL_FALSE;
-  oric->pch_tt_save_available          = SDL_FALSE;
-
-  oric->keymap = KMAP_QWERTY;
-}
-
-static char *keymapnames[] = { "qwerty",
-                               "azerty",
-                               "qwertz",
-                               NULL };
-
-static Uint8 hex2bin(char c)
-{
-  return ( ('0' <= c && c <= '9')? (c - '0') : (10 + (toupper(c) - 'A')) );
-}
-
-static Uint8 hex2byte(char* s)
-{
-  return hex2bin(s[0]) * 16 + hex2bin(s[1]);
-}
-
-static SDL_bool ishexchar(char c)
-{
-  if('0' <= c && c <= '9')
-    return SDL_TRUE;
-
-  c = toupper(c);
-  if('A' <= c && c <= 'F')
-    return SDL_TRUE;
-
-  return SDL_FALSE;
-}
-
-void load_patches( struct machine *oric, char *fname )
-{
-  FILE *f;
-  Sint32 i;
-  char *tmpname;
-
-  // MinGW doesn't have asprintf :-(
-  tmpname = malloc( strlen( fname ) + 10 );
-  if( !tmpname ) return;
-
-  sprintf( tmpname, "%s.pch", fname );
-
-  f = fopen( tmpname, "r" );
-  free( tmpname );
-  if( !f ) return;
-
-  while( !feof( f ) )
-  {
-    if( !fgets( filetmp, 2048, f ) ) break;
-
-    for( i=0; isws( filetmp[i] ); i++ ) ;
-
-    if( read_config_int(    &filetmp[i], "fd_cload_getname_pc",        &oric->pch_fd_cload_getname_pc, 0, 65535 ) )        continue;
-    if( read_config_int(    &filetmp[i], "fd_csave_getname_pc",        &oric->pch_fd_csave_getname_pc, 0, 65535 ) )        continue;
-    if( read_config_int(    &filetmp[i], "fd_store_getname_pc",        &oric->pch_fd_store_getname_pc, 0, 65535 ) )        continue;
-    if( read_config_int(    &filetmp[i], "fd_recall_getname_pc",       &oric->pch_fd_recall_getname_pc, 0, 65535 ) )       continue;
-    if( read_config_int(    &filetmp[i], "fd_getname_addr",            &oric->pch_fd_getname_addr, 0, 65535 ) )            continue;
-    if( read_config_int(    &filetmp[i], "tt_getsync_pc",              &oric->pch_tt_getsync_pc, 0, 65535 ) )              continue;
-    if( read_config_int(    &filetmp[i], "tt_getsync_end_pc",          &oric->pch_tt_getsync_end_pc, 0, 65535 ) )          continue;
-    if( read_config_int(    &filetmp[i], "tt_getsync_loop_pc",         &oric->pch_tt_getsync_loop_pc, 0, 65535 ) )         continue;
-    if( read_config_int(    &filetmp[i], "tt_readbyte_pc",             &oric->pch_tt_readbyte_pc, 0, 65535 ) )             continue;
-    if( read_config_int(    &filetmp[i], "tt_readbyte_end_pc",         &oric->pch_tt_readbyte_end_pc, 0, 65535 ) )         continue;
-    if( read_config_int(    &filetmp[i], "tt_readbyte_storebyte_addr", &oric->pch_tt_readbyte_storebyte_addr, 0, 65535 ) ) continue;
-    if( read_config_int(    &filetmp[i], "tt_readbyte_storezero_addr", &oric->pch_tt_readbyte_storezero_addr, 0, 65535 ) ) continue;
-    if( read_config_bool(   &filetmp[i], "tt_readbyte_setcarry",       &oric->pch_tt_readbyte_setcarry ) )                 continue;
-    if( read_config_int(    &filetmp[i], "tt_putbyte_pc",              &oric->pch_tt_putbyte_pc, 0, 65535 ) )              continue;
-    if( read_config_int(    &filetmp[i], "tt_putbyte_end_pc",          &oric->pch_tt_putbyte_end_pc, 0, 65535 ) )          continue;
-    if( read_config_int(    &filetmp[i], "tt_csave_end_pc",            &oric->pch_tt_csave_end_pc, 0, 65535 ) )            continue;
-    if( read_config_int(    &filetmp[i], "tt_store_end_pc",            &oric->pch_tt_store_end_pc, 0, 65535 ) )            continue;
-    if( read_config_int(    &filetmp[i], "tt_writeleader_pc",          &oric->pch_tt_writeleader_pc, 0, 65535 ) )          continue;
-    if( read_config_int(    &filetmp[i], "tt_writeleader_end_pc",      &oric->pch_tt_writeleader_end_pc, 0, 65535 ) )      continue;
-    if( read_config_option( &filetmp[i], "keymap",                     &oric->keymap, keymapnames ) )                      continue;
-
-    /*
-     * parse real patch line formated as:
-     * $xxxx:00112233445566778899AABBCCDDEEFF
-     */
-
-    // atleast address and 1 byte required
-    if(8 <= strlen(&filetmp[i]) && ';' != filetmp[i])
-    {
-      char* ptmp = &filetmp[i];
-      // check for reserved symbols
-      if(ptmp[0]=='$' && ptmp[5]==':')
-      {
-        // validate hex notation
-        if(ishexchar(ptmp[1]) && ishexchar(ptmp[2]) && ishexchar(ptmp[3]) && ishexchar(ptmp[4]))
-        {
-          Uint16 patchaddr = hex2byte(ptmp+1) * 256 + hex2byte(ptmp+3);
-          ptmp += 6;
-          while(ishexchar(ptmp[0]) && ishexchar(ptmp[1]))
-          {
-            Uint8 patchbyte = hex2byte(ptmp);
-            // printf("patching %.4X:%.2X\n", patchaddr, patchbyte);
-            oric->rom[patchaddr] = patchbyte ;
-            patchaddr++;
-            ptmp += 2;
-          }
-        }
-      }
-    }
-
-  }
-
-  fclose( f );
-
-  // Got all the addresses needed for each patch?
-  if( ( ( oric->pch_fd_cload_getname_pc != -1 ) ||
-        ( oric->pch_fd_csave_getname_pc != -1 ) ||
-        ( oric->pch_fd_store_getname_pc != -1 ) ||
-        ( oric->pch_fd_recall_getname_pc != -1 ) ) &&
-      ( oric->pch_fd_getname_addr != -1 ) )
-    oric->pch_fd_available = SDL_TRUE;
-
-  if( ( oric->pch_tt_getsync_pc != -1 ) &&
-      ( oric->pch_tt_getsync_end_pc != -1 ) &&
-      ( oric->pch_tt_getsync_loop_pc != -1 ) &&
-      ( oric->pch_tt_readbyte_pc != -1 ) &&
-      ( oric->pch_tt_readbyte_end_pc != -1 ) )
-    oric->pch_tt_available = SDL_TRUE;
-
-  if( ( oric->pch_tt_putbyte_pc != -1 ) &&
-      ( oric->pch_tt_putbyte_end_pc != -1 ) )
-    oric->pch_tt_save_available = SDL_TRUE;
-}
-
-static void setup_for_microdisc( struct machine *oric, void *readptr, void *writeptr )
-{
-  oric->cpu.read = readptr;
-  oric->cpu.write = writeptr;
-  oric->romdis = SDL_TRUE;
-  microdisc_init( &oric->md, &oric->wddisk, oric );
-  oric->disksyms = &sym_microdisc;
-}
-
-static void setup_for_bd500( struct machine *oric, void *readptr, void *writeptr )
-{
-  oric->cpu.read = readptr;
-  oric->cpu.write = writeptr;
-  oric->romdis = SDL_TRUE;
-  bd500_init( &oric->bd, &oric->wddisk, oric );
-  oric->disksyms = &sym_bd500;
-}
-
-static void setup_for_jasmin( struct machine *oric, void *readptr, void *writeptr )
-{
-  oric->cpu.read = readptr;
-  oric->cpu.write = writeptr;
-  oric->romdis = SDL_FALSE;
-  jasmin_init( &oric->jasmin, &oric->wddisk, oric );
-  oric->disksyms = &sym_jasmin;
-}
-
-static void setup_for_pravetzdisk( struct machine *oric, void *readptr, void *writeptr )
-{
-  oric->cpu.read = readptr;
-  oric->cpu.write = writeptr;
-  oric->romdis = SDL_FALSE;
-  pravetz_init( &oric->pravetz, oric );
-  oric->disksyms = &sym_pravetz;
-}
-
-static void setup_for_no_disk( struct machine *oric, void *readptr, void *writeptr )
-{
-  oric->drivetype = DRV_NONE;
-  oric->cpu.read = readptr;
-  oric->cpu.write = writeptr;
-  oric->romdis = SDL_FALSE;
-  oric->disksyms = NULL;
-}
-
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
 SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints )
 {
   int i;
@@ -2093,9 +2154,17 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
   setmenutoggles( oric );
   refreshstatus = SDL_TRUE;
 
+  // [Assinie]
+  // oric->stack_ptr = (unsigned char) 0;
+  periph_reset_all(oric);
+  // -]
+
   return SDL_TRUE;
 }
 
+        // ---------------------------------------------------------------------
+        //
+        // ---------------------------------------------------------------------
 void shut_machine( struct machine *oric )
 {
   if( oric->drivetype == DRV_MICRODISC ) { microdisc_free( &oric->md ); oric->drivetype = DRV_NONE; }
@@ -2124,78 +2193,353 @@ void shut_machine( struct machine *oric )
 #endif
 }
 
-void setdrivetype( struct machine *oric, struct osdmenuitem *mitem, int type )
+
+
+// =============================================================================
+//                              Emulation
+// =============================================================================
+// Switch between emulation/monitor/menus etc.
+void setemumode( struct machine *oric, struct osdmenuitem *mitem, int mode )
 {
-  if( oric->drivetype == type )
-    return;
+  oric->emu_mode = mode;
 
-  if( ( type == DRV_PRAVETZ ) &&
-      ( oric->type != MACH_PRAVETZ ) )
+  switch( mode )
   {
-    swapmach( oric, mitem, (DRV_PRAVETZ<<16)|MACH_PRAVETZ );
-    return;
-  }
-
-  shut_machine( oric );
-
-  switch( type )
-  {
-    case DRV_MICRODISC:
-    case DRV_BD500:
-    case DRV_JASMIN:
-    case DRV_PRAVETZ:
-        oric->drivetype = type;
+    case EM_RUNNING:
+      SDL_COMPAT_EnableKeyRepeat( 0, 0 );
+      SDL_COMPAT_EnableUNICODE( SDL_FALSE );
+      oric->ay.soundon = soundavailable && soundon && (!warpspeed);
+      if( oric->ay.soundon )
+      {
+        ay_flushlog( &oric->ay );
+        SDL_PauseAudio( 0 );
+      }
+      ula_set_dirty( oric );
       break;
 
-    default:
-      oric->drivetype = DRV_NONE;
+    case EM_MENU:
+      if( vidcap ) avi_close( &vidcap );
+      gotomenu( oric, NULL, 0 );
+      SDL_COMPAT_EnableKeyRepeat( SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL );
+      SDL_COMPAT_EnableUNICODE( SDL_TRUE );
+      oric->ay.soundon = SDL_FALSE;
+      if( soundavailable )
+        SDL_PauseAudio( 1 );
       break;
-  }
-
 #ifndef WWW_NO_MONITOR
-  mon_state_reset( oric );
+    case EM_DEBUG:
+      if( vidcap ) avi_close( &vidcap );
+      mon_enter( oric );
+      SDL_COMPAT_EnableKeyRepeat( SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL );
+      SDL_COMPAT_EnableUNICODE( SDL_TRUE );
+      oric->ay.soundon = SDL_FALSE;
+      if( soundavailable )
+        SDL_PauseAudio( 1 );
+      break;
 #endif
-  if( !init_machine( oric, oric->type, SDL_FALSE ) )
-  {
-    shut( oric );
-#ifdef __ANDROID__
-    error_printf("'init_machine' failed");
-#endif
-    exit( EXIT_FAILURE );
   }
-
-  setmenutoggles( oric );
 }
 
-void swapmach( struct machine *oric, struct osdmenuitem *mitem, int which )
+// -----------------------------------------------------------------------------
+//
+// -----------------------------------------------------------------------------
+static SDL_bool shifted = SDL_FALSE;
+SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
 {
-  int curr_drivetype;
+  Sint32 i;
 
-  curr_drivetype = oric->drivetype;
+  if( joy_filter_event( ev, oric ) )
+    return SDL_FALSE;
 
-  shut_machine( oric );
-
-  if( ((which>>16)&0xffff) != 0xffff )
-    curr_drivetype = (which>>16)&0xffff;
-
-  which &= 0xffff;
-
-  oric->drivetype = curr_drivetype;
-
-  /* The contents of the disk panel depend on the disk type. */
-  /* Wipe it to prevent garbage. */
-  clear_textzone( oric, TZ_DISK );
-
-#ifndef WWW_NO_MONITOR
-  mon_state_reset( oric );
-#endif
-  if( !init_machine( oric, which, which!=oric->type ) )
+//  char stmp[32];
+  switch( ev->type )
   {
-    shut( oric );
-#ifdef __ANDROID__
-    error_printf("'init_machine' failed");
+    case SDL_MOUSEBUTTONDOWN:
+      switch (ev->button.button)
+      {
+        case SDL_BUTTON_LEFT:
+          lightpendown = SDL_TRUE;
+          move_lightpen( oric, ev->button.x, ev->button.y );
+          break;
+
+        case SDL_BUTTON_RIGHT:
+          setemumode( oric, NULL, EM_MENU );
+          *needrender = SDL_TRUE;
+          break;
+      }
+      break;
+    case SDL_MOUSEBUTTONUP:
+      if( ev->button.button == SDL_BUTTON_LEFT )
+        lightpendown = SDL_FALSE;
+      break;
+
+    case SDL_MOUSEMOTION:
+      move_lightpen( oric, ev->motion.x, ev->motion.y );
+      break;
+
+#ifdef WWW
+    case SDL_MULTIGESTURE:
+      {
+        SDL_MultiGestureEvent *m = (SDL_MultiGestureEvent*)ev;
+        if (m->numFingers == 2)
+        {
+          setemumode( oric, NULL, EM_MENU );
+          *needrender = SDL_TRUE;
+        }
+        break;
+      }
 #endif
-    exit( EXIT_FAILURE );
+
+      case SDL_KEYUP:
+      switch( ev->key.keysym.sym )
+      {
+        case SDLK_F1:
+          setemumode( oric, NULL, EM_MENU );
+          *needrender = SDL_TRUE;
+          break;
+
+        case SDLK_F2:
+          setemumode( oric, NULL, EM_DEBUG );
+          *needrender = SDL_TRUE;
+          break;
+
+        case SDLK_F3:
+          softresetoric(oric, NULL, 0);
+          break;
+
+        case SDLK_F4:
+          if( ( shifted ) && ( oric->drivetype == DRV_JASMIN ) )
+          {
+            // ROMDIS
+            oric->cpu.write( &oric->cpu, 0x3fb, 1 );
+          }
+          if( oric->drivetype == DRV_MICRODISC )
+          {
+            oric->romdis = SDL_TRUE;
+            microdisc_init( &oric->md, &oric->wddisk, oric );
+          }
+          else if( oric->drivetype == DRV_BD500 )
+          {
+            oric->romdis = SDL_TRUE;
+            bd500_init( &oric->bd, &oric->wddisk, oric );
+          }
+          else if( oric->drivetype == DRV_PRAVETZ )
+          {
+            oric->pravetz.olay = 0;
+            oric->pravetz.romdis = 1;
+            oric->pravetz.extension = 0;
+            oric->romdis = !oric->pravetz.romdis;
+          }
+          setromon( oric );
+          m6502_reset( &oric->cpu );
+          via_init( &oric->via, oric, VIA_MAIN );
+          via_init( &oric->tele_via, oric, VIA_TELESTRAT );
+          acia_init( &oric->tele_acia, oric );
+
+          if (oric->twilighteboard_activated)
+          {
+            oric->ch376_activated=SDL_TRUE;
+            oric->twilighte=twilighte_oric_init();
+            if (oric->twilighte->microdisc==SDL_TRUE)
+            {
+              oric->drivetype = DRV_MICRODISC;
+              oric->disksyms = NULL;
+              microdisc_init( &oric->md, &oric->wddisk, oric );
+            }
+          }
+
+          if (oric->twilighte==NULL)
+          {
+            oric->twilighteboard_activated=SDL_FALSE;
+          }
+          else
+            oric->ch376_activated=SDL_TRUE;
+
+          if (oric->ch376_activated)
+          {
+            oric->ch376 = ch376_oric_init();
+            if (oric->ch376 != NULL)
+              ch376_oric_config(oric->ch376);
+          }
+
+          // [- Assinie
+          periph_reset_all(oric);
+          // -]
+          break;
+
+        case SDLK_F5:
+          oric->statusbar_mode = (oric->statusbar_mode+1) % STATUSBARMODE_LAST;
+          refreshstatus = SDL_TRUE;
+          oric->statusstr[0] = 0;
+          oric->newstatusstr = SDL_TRUE;
+          break;
+
+        case SDLK_F6:
+          warpspeed = ( vidcap || warpspeed )? SDL_FALSE : SDL_TRUE;
+
+          if( soundavailable && soundon )
+          {
+            ay_flushlog( &oric->ay );
+            oric->ay.soundon = !warpspeed;
+            SDL_PauseAudio( warpspeed );
+          }
+          break;
+
+        case SDLK_F7:
+          if( oric->drivetype == DRV_NONE ) break;
+
+          for( i=0; i<4; i++ )
+          {
+            if( ( oric->wddisk.disk[i] ) && ( oric->wddisk.disk[i]->modified ) )
+            {
+              if( shifted )
+              {
+                char frname[64];
+                char *dpath, *dfile;
+
+                if( oric->type != MACH_TELESTRAT )
+                {
+                  switch (oric->drivetype)
+                  {
+                    case DRV_PRAVETZ:
+                      dpath = pravdiskpath;
+                      dfile = pravdiskfile;
+                      break;
+
+                    default:
+                      dpath = diskpath;
+                      dfile = diskfile;
+                      break;
+                  }
+                } else {
+                  dpath = telediskpath;
+                  dfile = telediskfile;
+                }
+
+                sprintf( frname, "Save disk %d", i );
+                if( filerequester( oric, frname, dpath, dfile, FR_DISKSAVE ) )
+                {
+                  joinpath( dpath, dfile );
+                  diskimage_save( oric, filetmp, i );
+                }
+              } else {
+                diskimage_save( oric, oric->wddisk.disk[i]->filename, i );
+              }
+            }
+          }
+          break;
+
+        case SDLK_F8:
+          togglefullscreen( oric, NULL, 0 );
+          break;
+
+        case SDLK_F9:
+          toggletapecap( oric, find_item_by_function(mainitems, toggletapecap), 0 );
+          break;
+
+        case SDLK_F10:
+#ifndef __ANDROID__
+           if( vidcap )
+           {
+             ay_lockaudio( &oric->ay );
+             avi_close( &vidcap );
+             ay_unlockaudio( &oric->ay );
+             do_popup( oric, "AVI capture stopped" );
+             refreshavi = SDL_TRUE;
+             break;
+           }
+
+           sprintf( vidcapname, "Capturing to video%02d.avi", vidcapcount );
+           warpspeed = SDL_FALSE;
+           ay_lockaudio( &oric->ay );
+           vidcap = avi_open( &vidcapname[13], oricpalette, soundavailable&&soundon, oric->vid_freq );
+           ay_unlockaudio( &oric->ay );
+           if( vidcap )
+           {
+             vidcapcount++;
+             do_popup( oric, vidcapname );
+           }
+           refreshavi = SDL_TRUE;
+#else
+           android_togglekeyboard( oric );
+#endif
+           break;
+#ifdef __CBCOPY__
+        case SDLK_F11:
+          clipboard_copy( oric );
+          break;
+#endif
+#ifdef __CBPASTE__
+        case SDLK_F12:
+          clipboard_paste( oric );
+          break;
+#endif
+
+#ifdef __amigaos4__
+        case SDLK_HELP:
+           IDOS->SystemTags( "Multiview Oricutron.guide",
+             SYS_Input, IDOS->Open( "NIL:", MODE_NEWFILE ),
+             SYS_Output, IDOS->Open( "NIL:", MODE_NEWFILE ),
+             SYS_Asynch, TRUE,
+             TAG_DONE );
+           break;
+#endif
+
+#ifdef __MORPHOS__
+        case SDLK_HELP:
+           {
+           struct NewAmigaGuide nag =
+           { (BPTR) NULL,
+             "Oricutron.guide",
+             NULL,
+             NULL,
+             NULL,
+             NULL,
+             NULL,
+             0,
+             NULL,
+             "MAIN",
+             0,
+             NULL,
+             NULL
+           };
+
+           OpenAmigaGuide(&nag, TAG_DONE);
+           }
+           break;
+#endif
+
+        case SDLK_PRINT:
+          sprintf( screencapname, "Capturing to screenshot%02d.bmp", screencapcount );
+          screencapcount++;
+          do_popup( oric, screencapname );
+          SDL_COMPAT_TakeScreenshot( &screencapname[13] );
+          break;
+
+        case SDLK_LSHIFT:
+        case SDLK_RSHIFT:
+          shifted = SDL_FALSE;
+
+        default:
+          ay_keypress( &oric->ay, mapkey( oric, ev->key.keysym.sym ), SDL_FALSE );
+          break;
+      }
+      break;
+
+    case SDL_KEYDOWN:
+      switch( ev->key.keysym.sym )
+      {
+        case SDLK_LSHIFT:
+        case SDLK_RSHIFT:
+          shifted = SDL_TRUE;
+
+        default:
+          ay_keypress( &oric->ay, mapkey( oric, ev->key.keysym.sym ), SDL_TRUE );
+          break;
+      }
+      break;
   }
+
+  return SDL_FALSE;
 }
 

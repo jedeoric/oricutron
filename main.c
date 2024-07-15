@@ -68,6 +68,8 @@
 #include "snapshot.h"
 #include "keyboard.h"
 
+#include "plugins/assinie/periph.h"
+
 #ifdef _MSC_VER
 #if SDL_MAJOR_VERSION == 1
 #undef main
@@ -197,7 +199,7 @@ static void init_fileprefix( char *argv[] )
 
   fileprefix = "/data/data/com.emul.oricutron/files/";
 
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__bad) || defined(__APPLE__)
 
   // Find program directory
   fileprefix = realpath( argv[0], 0 );           // convert to absolute path
@@ -1473,6 +1475,9 @@ void shut( struct machine *oric )
     shut_filerequester( oric );
     shut_msgbox( oric );
     shut_gui( oric );
+    // [- Assinie
+    shut_periph( oric );
+    // -]
   }
   if( need_sdl_quit )
     SDL_COMPAT_Quit( SDL_TRUE );
