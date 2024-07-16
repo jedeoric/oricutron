@@ -1554,6 +1554,9 @@ void toggleaciabackend( struct machine *oric, struct osdmenuitem *mitem, int dum
 // Toggle ch376 on/off
 void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 {
+    // [Assinie] - Tests
+    // [--
+/*
 
 	if (oric->ch376_activated)
 	{
@@ -1567,6 +1570,8 @@ void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 	oric->ch376 = ch376_oric_init();
 	if (oric->ch376 != NULL)
 		ch376_oric_config(oric->ch376);
+*/
+    // -]
 }
 
 // Toggle twilighte on/off

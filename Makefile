@@ -380,7 +380,8 @@ CFLAGS += -g $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(S
 # LFLAGS += -ldl -Wl,-rpath='$$ORIGIN/plugins' -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) -lGL -lX11
 LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
-EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+# EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
 TARGET = oricutron
 INSTALLDIR = /usr/local
 endif

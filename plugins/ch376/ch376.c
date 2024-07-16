@@ -247,11 +247,11 @@ static const char * normalize_pattern(const char *pattern, char *normalized_patt
 /* /// "Portable operating system-dependent prototypes" */
 
 // Allocate "size" byte of memory
-static void * system_alloc_mem(int size);
+/* static */ void * system_alloc_mem(int size);
 
 // Free memory previously allocated with system_alloc_mem
 // It is safe to call it with NULL
-static void system_free_mem(void *ptr);
+/* static */ void system_free_mem(void *ptr);
 
 // Initialize the operating system dependent context
 // User data may be used if external data is required for such initialization
@@ -332,12 +332,12 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 #define dbg_printf(...)
 #endif
 
-static void * system_alloc_mem(int size)
+/* static */ void * system_alloc_mem(int size)
 {
     return AllocVec(size, MEMF_ANY);
 }
 
-static void system_free_mem(void *ptr)
+/* static */ void system_free_mem(void *ptr)
 {
     FreeVec(ptr);
 }
@@ -715,12 +715,12 @@ static void dbg_printf(LPCTSTR str, ...)
 #define dbg_printf(...)
 #endif
 
-static void * system_alloc_mem(int size)
+/* static */ void * system_alloc_mem(int size)
 {
     return GlobalAlloc(GMEM_FIXED, size);
 }
 
-static void system_free_mem(void *ptr)
+/* static */ void system_free_mem(void *ptr)
 {
     GlobalFree(ptr);
 }
@@ -1071,12 +1071,12 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 #define dbg_printf(...)
 #endif
 
-static void * system_alloc_mem(int size)
+/* static */ void * system_alloc_mem(int size)
 {
     return malloc(size);
 }
 
-static void system_free_mem(void *ptr)
+/* static */ void system_free_mem(void *ptr)
 {
     if (ptr)
         free(ptr);
@@ -2735,3 +2735,4 @@ const char * ch376_get_usb_drive_path(struct ch376 *ch376)
     return ch376->usb_drive_path;
 }
 /* /// */
+

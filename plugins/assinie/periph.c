@@ -1032,7 +1032,6 @@ struct PLUGIN * load_plugin(char *library_name)
     // -------------------------------------------------------------------------
 SDL_bool periph_test(struct machine *oric)
 {
-//    SDL_bool (*plugin_init)(void *tzprintfpos, void *tzputc, void *mon_periphmod);
     struct PLUGIN *plugin;
 
     if (!nb_periph)
@@ -1052,6 +1051,12 @@ SDL_bool periph_test(struct machine *oric)
             if (!periph_add(oric, plugin, "Reg 1", 0x366, SDL_FALSE))
                 dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
         }
+
+        // On suppose que le fichier de configuration a déjà été lu
+        plugin=load_plugin("libch376.so");
+        if (plugin != NULL)
+            if (!periph_add(oric, plugin, NULL, 0x340, oric->ch376_activated))
+                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
 
         // Création du menu OSD
         periphitems = calloc(nb_periph+3, sizeof(struct osdmenuitem));
