@@ -11,6 +11,8 @@ struct PLUGIN {
     unsigned char (*read)(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool fexec);
     SDL_bool (*write)(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data);
 
+    void (*ticktock)(struct machine *oric, unsigned int instance, int cycles);
+
     void (*mon_update)(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid);
     void (*mon_store_state)(struct machine *oric, unsigned int instance);
 };

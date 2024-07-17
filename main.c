@@ -1521,6 +1521,10 @@ void frameloop_overclock( struct machine *oric, SDL_bool *framedone, SDL_bool *n
       via_clock( &oric->via, instcycles );
       ay_ticktock( &oric->ay, instcycles );
 
+      // [- Assinie
+      periph_ticktock_all(oric, instcycles);
+      // -]
+
       switch( oric->drivetype )
       {
         case DRV_MICRODISC:
@@ -1583,6 +1587,10 @@ void frameloop_normal( struct machine *oric, SDL_bool *framedone, SDL_bool *need
 
       via_clock( &oric->via, oric->cpu.icycles );
       ay_ticktock( &oric->ay, oric->cpu.icycles );
+
+      // [- Assinie
+      periph_ticktock_all(oric, oric->cpu.icycles);
+      // -]
 
       switch( oric->drivetype )
       {

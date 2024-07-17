@@ -1,3 +1,4 @@
+/*
 #define PERIPH_NAME_LEN 10
 
 struct PLUGIN {
@@ -14,6 +15,8 @@ struct PLUGIN {
     void (*mon_update)(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid);
     void (*mon_store_state)(struct machine *oric, unsigned int instance);
 };
+*/
+#include "../../plugin.h"
 
 SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, unsigned short addr_start, SDL_bool enable);
 
@@ -52,6 +55,7 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id );
 void shut_periph(struct machine *oric);
 SDL_bool periph_shut_by_id(struct machine *oric, int id);
 SDL_bool periph_reset_all(struct machine *oric);
+SDL_bool periph_ticktock_all(struct machine *oric, int cycles);
 void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid);
 void mon_periph_oldvalid(SDL_bool oldvalid);
 void mon_periphmod( int x, int y, int w, struct textzone *vtz );

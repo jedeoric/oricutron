@@ -4260,6 +4260,11 @@ static unsigned int steppy_step( struct machine *oric )
   tape_patches( oric );
   via_clock( &oric->via, oric->cpu.icycles );
   ay_ticktock( &oric->ay, oric->cpu.icycles );
+
+  // [- Assinie
+  periph_ticktock_all(oric, oric->cpu.icycles);
+  // -]
+
   if((oric->drivetype == DRV_MICRODISC) || (oric->drivetype == DRV_JASMIN)) wd17xx_ticktock( &oric->wddisk, oric->cpu.icycles );
   if( oric->type == MACH_TELESTRAT )
   {
@@ -4372,6 +4377,11 @@ SDL_bool mon_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           tape_patches( oric );
           via_clock( &oric->via, oric->cpu.icycles );
           ay_ticktock( &oric->ay, oric->cpu.icycles );
+
+          // [- Assinie
+          periph_ticktock_all(oric, oric->cpu.icycles);
+          // -]
+
           if((oric->drivetype == DRV_MICRODISC) || (oric->drivetype == DRV_JASMIN)) wd17xx_ticktock( &oric->wddisk, oric->cpu.icycles );
           if( oric->type == MACH_TELESTRAT )
           {

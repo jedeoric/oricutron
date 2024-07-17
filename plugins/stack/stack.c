@@ -260,6 +260,7 @@ struct PLUGIN plugin = { "STACK",
                 stack_reset,
                 stack_read,
                 stack_write,
+		NULL,
                 mon_stack_update,
                 mon_stack_store,
     };

@@ -242,6 +242,7 @@ struct PLUGIN plugin = { "REGISTER",
                 register_reset,
                 register_read,
                 register_write,
+		NULL,
                 mon_register_update,
                 mon_register_store,
     };

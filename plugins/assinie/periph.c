@@ -38,6 +38,7 @@
 #include "tape.h"
 #include "keyboard.h"
 */
+
 #include "periph.h"
 
 #include <dlfcn.h>
@@ -285,6 +286,25 @@ SDL_bool periph_reset_all(struct machine *oric)
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
+SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
+{
+    int i=0;
+    while (i != nb_periph)
+    {
+        if (periph_table[i].enable && (periph_table[i].periph->ticktock != NULL))
+        {
+            // dbg_printf("PERIPH ticktock: %s\n", periph_table[i].name);
+
+            periph_table[i].periph->ticktock(oric, periph_table[i].instance, cycles);
+        }
+        i++;
+    }
+    return SDL_TRUE;
+}
+
+    // -------------------------------------------------------------------------
+    //
+    // -------------------------------------------------------------------------
 void shut_periph(struct machine *oric)
 {
     dbg_printf("*** Shutdown periph\n");
@@ -331,10 +351,13 @@ unsigned char periph_read(struct machine *oric, unsigned short addr)
 
     if (i < nb_periph)
     {
-        dbg_printf("PERIPH READ: %s ($%04x): (from: $%04x)", periph_table[i].name, addr, oric->cpu.lastpc);
+        // dbg_printf("PERIPH READ: %s ($%04x): (from: $%04x)", periph_table[i].name, addr, oric->cpu.lastpc);
+
         // return periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start);
+
         int data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_TRUE);
-        dbg_printf(" -> $%02x\n", data);
+
+        // dbg_printf(" -> $%02x\n", data);
         return data;
     }
     // ERREUR: pas de périphérique pour l'adresse demandée
@@ -350,7 +373,8 @@ SDL_bool periph_write(struct machine *oric, unsigned short addr, unsigned char d
 
     if (i < nb_periph)
     {
-        dbg_printf("PERIPH WRITE: %s ($%04x): $%02x (from $%04x)\n", periph_table[i].name, addr, data, oric->cpu.lastpc);
+        // dbg_printf("PERIPH WRITE: %s ($%04x): $%02x (from $%04x)\n", periph_table[i].name, addr, data, oric->cpu.lastpc);
+
         return periph_table[i].periph->write(oric, periph_table[i].instance, addr - periph_table[i].addr_start, data);
     }
 
@@ -1056,6 +1080,11 @@ SDL_bool periph_test(struct machine *oric)
         plugin=load_plugin("libch376.so");
         if (plugin != NULL)
             if (!periph_add(oric, plugin, NULL, 0x340, oric->ch376_activated))
+                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
+
+        plugin=load_plugin("libds1501.so");
+        if (plugin != NULL)
+            if (!periph_add(oric, plugin, NULL, 0, oric->ch376_activated))
                 dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
 
         // Création du menu OSD

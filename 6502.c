@@ -258,7 +258,7 @@ void m6502_reset( struct m6502 *cpu )
 #define CPAGECHECK ((cpu->baddr&0xff00) != (baddr&0xff00))
 
 // Page check to see if a branch takes you out of the current page
-#define BPAGECHECK ( (cpu->baddr&0xff00) != (cpu->calcpc&0xff00) )
+#define BPAGECHECK ( (cpu->baddr&0xff00) != ((cpu->calcpc+2)&0xff00) )
 
 // Macro to perform branch logic
 #define BRANCH(condition) if( condition ) cpu->pc = cpu->baddr; else cpu->pc++;
@@ -1003,7 +1003,9 @@ SDL_bool m6502_inst( struct m6502 *cpu )
   {
     PUSHW( cpu->pc );
     PUSHB( MAKEFLAGSBC );
-    cpu->f_d = 0;
+    // [- Assinie: 65C05 only
+    // cpu->f_d = 0;
+    // -]
     if( cpu->calcint == 2 )
     {
       cpu->nmi = SDL_FALSE;
@@ -1024,7 +1026,9 @@ SDL_bool m6502_inst( struct m6502 *cpu )
       PUSHW( (cpu->pc+1) );
       PUSHB( MAKEFLAGS | (1<<4) );   // Set B on the stack
       cpu->f_i = 1;
-      cpu->f_d = 0;
+      // [- Assinie 65C02 only
+      //cpu->f_d = 0;
+      // -]
       cpu->pc = cpu->read( cpu, 0xfffe ) | (cpu->read( cpu, 0xffff )<<8);
       break;
 
