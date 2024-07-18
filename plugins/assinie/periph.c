@@ -1100,7 +1100,7 @@ SDL_bool periph_test(struct machine *oric)
             memset(&periphitems[i], 0x00, sizeof(struct osdmenuitem));
 
             // periphitems[i].name = strndup(&periph_table[i].osditem, PERIPH_NAME_LEN+1);
-            periphitems[i].name = malloc(PERIPH_NAME_LEN+10);
+            periphitems[i].name = malloc(PERIPH_NAME_LEN+11);
             if (periphitems[i].name)
                 sprintf(periphitems[i].name, "%c%-*s    $%04X", (periph_table[i].enable ? 14 : 32), PERIPH_NAME_LEN, periph_table[i].name, periph_table[i].addr_start);
 
