@@ -54,10 +54,10 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 #define INSTANCE_MAX 1
 
 struct STACK {
-  unsigned char data[STACK_SIZE];
-  unsigned char ptr;
-  unsigned char old_data[STACK_SIZE];
-  unsigned char old_ptr;
+  Uint8 data[STACK_SIZE];
+  Uint8 ptr;
+  Uint8 old_data[STACK_SIZE];
+  Uint8 old_ptr;
 };
 
 struct STACK userdata[INSTANCE_MAX];
@@ -124,10 +124,10 @@ SDL_bool stack_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char stack_read(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool run)
+Uint8 stack_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     if ( (!instance) || (instance > stack_instances) )
-        return (unsigned char) 0;
+        return (Uint8) 0;
 
     instance--;
 
@@ -137,7 +137,7 @@ unsigned char stack_read(struct machine *oric, unsigned int instance, unsigned s
             if (run)
             {
                 // return userdata[instance].data[--userdata[instance].ptr];
-                userdata[instance].ptr = (unsigned char)(userdata[instance].ptr -1) % STACK_SIZE;
+                userdata[instance].ptr = (Uint8)(userdata[instance].ptr -1) % STACK_SIZE;
                 return userdata[instance].data[userdata[instance].ptr];
             }
             else
@@ -147,7 +147,7 @@ unsigned char stack_read(struct machine *oric, unsigned int instance, unsigned s
 
         default:
             dbg_printf("STACK READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -156,7 +156,7 @@ unsigned char stack_read(struct machine *oric, unsigned int instance, unsigned s
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool stack_write(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data)
+SDL_bool stack_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
 {
     if ( (!instance) || (instance > stack_instances) )
         return SDL_FALSE;
@@ -177,7 +177,7 @@ SDL_bool stack_write(struct machine *oric, unsigned int instance, unsigned short
 
         default:
             dbg_printf("STACK WRITE: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
     return SDL_TRUE;
 }
@@ -185,7 +185,7 @@ SDL_bool stack_write(struct machine *oric, unsigned int instance, unsigned short
     // -------------------------------------------------------------------------
     //                  Mise à jour de la page du moniteur
     // -------------------------------------------------------------------------
-void mon_stack_update(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid)
+void mon_stack_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     if ( (!instance) || (instance > stack_instances) )
         return;

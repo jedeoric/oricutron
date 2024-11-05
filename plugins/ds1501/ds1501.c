@@ -1,10 +1,11 @@
 // -----------------------------------------------------------------------------
-//
+// vim: ts=4 et
 // -----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #if defined(__amigaos4__) || defined(__MORPHOS__)
 #include <proto/dos.h>
@@ -105,20 +106,20 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 
 struct DS1501_REGISTERS
 {
-    unsigned char seconds;
-    unsigned char minutes;
-    unsigned char hours;
-    unsigned char day;
-    unsigned char date;
-    unsigned char month;
-    unsigned char year;
-    unsigned char century;
-    unsigned char alarm_seconds;
-    unsigned char alarm_minutes;
-    unsigned char alarm_hours;
-    unsigned char alarm_day_date;
-    unsigned char watchdog_ms;
-    unsigned char watchdog_s;
+    Uint8 seconds;
+    Uint8 minutes;
+    Uint8 hours;
+    Uint8 day;
+    Uint8 date;
+    Uint8 month;
+    Uint8 year;
+    Uint8 century;
+    Uint8 alarm_seconds;
+    Uint8 alarm_minutes;
+    Uint8 alarm_hours;
+    Uint8 alarm_day_date;
+    Uint8 watchdog_ms;
+    Uint8 watchdog_s;
 };
 
 struct DS1501
@@ -126,15 +127,15 @@ struct DS1501
     struct DS1501_REGISTERS internal;
     struct DS1501_REGISTERS external;
 
-    unsigned char control_a;
-    unsigned char control_b;
-    unsigned char ram_address;
-    unsigned char ram[256];
+    Uint8 control_a;
+    Uint8 control_b;
+    Uint8 ram_address;
+    Uint8 ram[256];
 
     int clock_us;
     int clock_ms;
-    unsigned char internal_watchdog_ms;
-    unsigned char internal_watchdog_s;
+    Uint8 internal_watchdog_ms;
+    Uint8 internal_watchdog_s;
 
     SDL_bool pending_transfert;
 };
@@ -146,7 +147,7 @@ int plugin_instances = 0;
 
 static char *description = "DS1501";
 
-unsigned char bin2bcd(unsigned char value);
+Uint8 bin2bcd(Uint8 value);
 
 // -----------------------------------------------------------------------------
 //
@@ -181,6 +182,8 @@ unsigned int plugin_create(struct machine *oric)
             return 0;
         }
 
+        srandom(time(0));
+
         // Initilisation des flags
         // EOSC = E32K = 0
         userdata[plugin_instances]->internal.month &= ~(EOSC_mask | E32K_mask);
@@ -189,13 +192,20 @@ unsigned int plugin_create(struct machine *oric)
         // Internal
 
         // On force les bits non utilisés à 0
-        userdata[plugin_instances]->internal.seconds &= 0x7f;
-        userdata[plugin_instances]->internal.minutes &= 0x7f;
-        userdata[plugin_instances]->internal.hours &= 0x3f;
-        userdata[plugin_instances]->internal.day &= 0x07;
-        userdata[plugin_instances]->internal.date &= 0x3f;
+        userdata[plugin_instances]->internal.seconds = random() % 60;
+        userdata[plugin_instances]->internal.minutes = random() % 60;
+        userdata[plugin_instances]->internal.hours = random() % 24;
+        userdata[plugin_instances]->internal.day = random() % 7 +1;
+        userdata[plugin_instances]->internal.date = random() % 31 +1;
 
-        userdata[plugin_instances]->internal.alarm_hours &= 0xbf;
+        userdata[plugin_instances]->internal.month = random() % 12 +1;
+        userdata[plugin_instances]->internal.year = random() % 100;
+        userdata[plugin_instances]->internal.century = random() % 40;
+
+        userdata[plugin_instances]->internal.alarm_seconds = (userdata[plugin_instances]->internal.alarm_seconds & 0x80) + random() % 60;
+        userdata[plugin_instances]->internal.alarm_minutes = (userdata[plugin_instances]->internal.alarm_seconds & 0x80) + random() % 60;
+        userdata[plugin_instances]->internal.alarm_hours = (userdata[plugin_instances]->internal.alarm_seconds & 0x80) + random() % 23;
+        userdata[plugin_instances]->internal.alarm_day_date = (userdata[plugin_instances]->internal.alarm_day_date & 0xC0) + random() % 31 +1;
 
         // Initilisation des flags
         // EOSC = E32K = 0
@@ -204,14 +214,15 @@ unsigned int plugin_create(struct machine *oric)
         // TIE = KIE = WDE = WDS = 0
         userdata[plugin_instances]->control_b &= ~(TIE_mask | KIE_mask |  WDE_mask | WDS_mask);
 
-        // Indique Vbat (BFL1) et Vbaux (BFL2) Ok
-        userdata[plugin_instances]->control_b &= ~(BLF1_mask | BLF2_mask);
+        // Indique Vbat (BLF1) et Vbaux (BLF2) Ok
+        userdata[plugin_instances]->control_a &= ~(BLF1_mask | BLF2_mask);
 
         // Watchdog
-        // userdata[plugin_instances]->internal.watchdog_ms = 0;
-        // userdata[plugin_instances]->internal.watchdog_s = 0;
-        // userdata[plugin_instances]->internal_watchdog_ms = 0;
-        // userdata[plugin_instances]->internal_watchdog_s = 0;
+        userdata[plugin_instances]->internal.watchdog_ms = random() % 100;
+        userdata[plugin_instances]->internal.watchdog_s = random() % 100;
+
+        userdata[plugin_instances]->internal_watchdog_ms = userdata[plugin_instances]->internal.watchdog_ms;
+        userdata[plugin_instances]->internal_watchdog_s = userdata[plugin_instances]->internal.watchdog_s;
 
         // External
 
@@ -222,13 +233,19 @@ unsigned int plugin_create(struct machine *oric)
         userdata[plugin_instances]->external.day     = bin2bcd(userdata[plugin_instances]->internal.day);
         userdata[plugin_instances]->external.date    = bin2bcd(userdata[plugin_instances]->internal.date);
 
-        userdata[plugin_instances]->external.alarm_hours = userdata[plugin_instances]->internal.alarm_hours;
+        userdata[plugin_instances]->external.month   = bin2bcd(userdata[plugin_instances]->internal.month & 0x1f) | (userdata[plugin_instances]->internal.month & 0xe0);
+        userdata[plugin_instances]->external.year   = bin2bcd(userdata[plugin_instances]->internal.year);
+        userdata[plugin_instances]->external.century   = bin2bcd(userdata[plugin_instances]->internal.century);
 
-        userdata[plugin_instances]->external.month   = bin2bcd(userdata[plugin_instances]->internal.month);
+        userdata[plugin_instances]->external.alarm_hours = bin2bcd(userdata[plugin_instances]->internal.alarm_hours & 0x7f) | (userdata[plugin_instances]->internal.alarm_hours & 0x80);
+        userdata[plugin_instances]->external.alarm_minutes = bin2bcd(userdata[plugin_instances]->internal.alarm_minutes & 0x7f) | (userdata[plugin_instances]->internal.alarm_minutes & 0x80);
+        userdata[plugin_instances]->external.alarm_seconds = bin2bcd(userdata[plugin_instances]->internal.alarm_seconds & 0x7f) | (userdata[plugin_instances]->internal.alarm_seconds & 0x80);
+        userdata[plugin_instances]->external.alarm_day_date = bin2bcd(userdata[plugin_instances]->internal.alarm_day_date & 0x3f) | (userdata[plugin_instances]->internal.alarm_day_date & 0xC0);
+
 
         // Watchdog
-        userdata[plugin_instances]->external.watchdog_ms = userdata[plugin_instances]->internal.watchdog_ms;
-        userdata[plugin_instances]->external.watchdog_s  = userdata[plugin_instances]->internal.watchdog_s;
+        userdata[plugin_instances]->external.watchdog_ms = bin2bcd(userdata[plugin_instances]->internal.watchdog_ms);
+        userdata[plugin_instances]->external.watchdog_s  = bin2bcd(userdata[plugin_instances]->internal.watchdog_s);
 
 
         // Initialisation des compteurs
@@ -239,9 +256,9 @@ unsigned int plugin_create(struct machine *oric)
         userdata[plugin_instances]->pending_transfert = SDL_FALSE;
 
         // Temporaire pour tests
-        userdata[plugin_instances]->internal.hours = 0;
-        userdata[plugin_instances]->internal.minutes = 0;
-        userdata[plugin_instances]->internal.seconds = 0;
+        // userdata[plugin_instances]->internal.hours = 0;
+        // userdata[plugin_instances]->internal.minutes = 0;
+        // userdata[plugin_instances]->internal.seconds = 0;
 
       return ++plugin_instances;
     }
@@ -283,10 +300,10 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool run)
+Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     if ( (!instance) || (instance > plugin_instances) )
-        return (unsigned char) 0;
+        return (Uint8) 0;
 
     instance--;
 
@@ -366,7 +383,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
         // BLF1 | BLF2 | PRS | PAB | TDF | KSF | WDF | IRQF
         case 0x0e:
         {
-            unsigned char data = userdata[instance]->control_a;
+            Uint8 data = userdata[instance]->control_a;
             if (run)
                 userdata[instance]->control_a &= ~(TDF_mask|KSF_mask|WDF_mask|IRQF_mask);
 
@@ -387,7 +404,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
         // Reserved
         case 0x11:
         case 0x12:
-            return (unsigned char) 0;
+            return (Uint8) 0;
             break;
 
         // RAM Data
@@ -404,7 +421,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
 
         default:
             dbg_printf("DS1501 READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -419,7 +436,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
     //        ou si il ne faut considérer que ceux qui ont été modifiés entre TE=0
     //        et TE=1
 
-SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data)
+SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -430,7 +447,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
     {
        // Seconds
         case 0x00:
-            // data &= 0x7f;
+            // 00-59: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.seconds = data & 0x7f;
 
@@ -443,7 +460,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Minutes
         case 0x01:
-            // data &= 0x7f;
+            // 00-59: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.minutes = data & 0x7f;
 
@@ -456,7 +473,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Hours
         case 0x02:
-            // data &= 0x3f;
+            // 00-23: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.hours = data & 0x3f;
 
@@ -469,6 +486,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Day
         case 0x03:
+            // 01-07: Vérifier ce qu'il se passe si on est hors limites
             userdata[instance]->external.day = data & 0x07;
 
             if (userdata[instance]->control_b & TE_mask)
@@ -480,7 +498,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Date
         case 0x04:
-            //data &= 0x3f;
+            // 01-31: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.date = data & 0x3f;
 
@@ -493,7 +511,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Month
         case 0x05:
-            // data &= 0x1f;
+            // 01-12: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.month = data;
 
@@ -511,6 +529,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Year
         case 0x06:
+            // 00-99: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.year = data;
 
@@ -523,6 +542,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Century
         case 0x07:
+            // 00-39: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.century = data;
 
@@ -536,30 +556,35 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Alarm Seconds
         case 0x08:
+            // 00-59: Vérifier ce qu'il se passe si on est hors limites
             userdata[instance]->external.alarm_seconds = data;
             userdata[instance]->internal.alarm_seconds = data;
             break;
 
         // Alarm Minutes
         case 0x09:
+            // 00-59: Vérifier ce qu'il se passe si on est hors limites
             userdata[instance]->external.alarm_minutes = data;
             userdata[instance]->internal.alarm_minutes = data;
             break;
 
         // Alarm Hours
         case 0x0a:
+            // 00-23: Vérifier ce qu'il se passe si on est hors limites
             userdata[instance]->external.alarm_hours = data & 0xbf;
             userdata[instance]->internal.alarm_hours = data & 0xbf;
             break;
 
         // Alarm Day/Date
         case 0x0b:
+            // 01-07 / 01-31: Vérifier ce qu'il se passe si on est hors limites
            userdata[instance]->external.alarm_day_date = data;
            userdata[instance]->internal.alarm_day_date = data;
             break;
 
         // Watchdog
         case 0x0c:
+            // 00-99: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.watchdog_ms = data;
             userdata[instance]->internal.watchdog_ms = bcd2bin(data);
@@ -568,6 +593,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         // Watchdog
         case 0x0d:
+            // 00-99: Vérifier ce qu'il se passe si on est hors limites
             // data = (data & 0x0f) + (data >> 4)*10;
             userdata[instance]->external.watchdog_s = data;
             userdata[instance]->internal.watchdog_s = bcd2bin(data);
@@ -577,7 +603,8 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
         // Control A
         // BLF1 | BLF2 | PRS | PAB | TDF | KSF | WDF | IRQF
         case 0x0e:
-            userdata[instance]->control_a = data;
+            // Les bits BLF1 et BLF2 sont read-only
+            userdata[instance]->control_a = (data & ~(BLF1_mask | BLF2_mask)) | (userdata[instance]->control_a & (BLF1_mask | BLF2_mask));
 
             if (userdata[instance]->control_a & KSF_mask)
             {
@@ -630,16 +657,20 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
     // userdata[instance]->internal.watchdog_s = userdata[instance]->internal_watchdog_s;
     // userdata[instance]->internal.watchdog_ms = userdata[instance]->internal_watchdog_ms;
 
+    dbg_printf("DS1501: internal.century=%d, external.century=%d, TE_pending=%d\n", userdata[instance]->internal.century, userdata[instance]->external.century, (int)userdata[instance]->pending_transfert );
+    dbg_printf("DS1501: internal.year=%d, external.year=%d\n", userdata[instance]->internal.year, userdata[instance]->external.year );
+    dbg_printf("DS1501: TE=%d\n", userdata[instance]->control_b & TE_mask);
 
     // Transfert vers external
     if( (userdata[instance]->control_b & TE_mask) && userdata[instance]->pending_transfert )
     {
+        dbg_printf("DS1501: transfert\n");
     	// Heure
         userdata[instance]->internal.seconds = bcd2bin(userdata[instance]->external.seconds);
         userdata[instance]->internal.minutes = bcd2bin(userdata[instance]->external.minutes);
         userdata[instance]->internal.hours = bcd2bin(userdata[instance]->external.hours);
 
-	// Date
+	    // Date
         userdata[instance]->internal.day = bcd2bin(userdata[instance]->external.day);
 
         userdata[instance]->internal.date = bcd2bin(userdata[instance]->external.date);
@@ -758,7 +789,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                         // Date
                         userdata[instance]->internal.date += 1;
 
-                        unsigned char month_flags = userdata[instance]->internal.month & 0xe0;
+                        Uint8 month_flags = userdata[instance]->internal.month & 0xe0;
                         userdata[instance]->internal.month = userdata[instance]->internal.month & 0x1f;
 
                         switch  (userdata[instance]->internal.date)
@@ -830,7 +861,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
 
             }
             // Gestion de l'alarme
-            unsigned char AMx = ((userdata[instance]->internal.alarm_day_date & AM4_mask) >> 4) | ((userdata[instance]->internal.alarm_hours & AM3_mask) >> 5) | ((userdata[instance]->internal.alarm_minutes & AM2_mask) >> 6) | ((userdata[instance]->internal.alarm_seconds & AM1_mask) >> 7);
+            Uint8 AMx = ((userdata[instance]->internal.alarm_day_date & AM4_mask) >> 4) | ((userdata[instance]->internal.alarm_hours & AM3_mask) >> 5) | ((userdata[instance]->internal.alarm_minutes & AM2_mask) >> 6) | ((userdata[instance]->internal.alarm_seconds & AM1_mask) >> 7);
 
             SDL_bool alarm = SDL_TRUE;
 
@@ -910,15 +941,15 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
     //         88 99 aa bb cc dd ee ff
     //         00 11 22 33 44 55 66 77
 
-void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid)
+void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return;
 
     instance--;
 
-    unsigned char AMx = ((userdata[instance]->external.alarm_day_date & AM4_mask) >> 4) | ((userdata[instance]->external.alarm_hours & AM3_mask) >> 5) | ((userdata[instance]->external.alarm_minutes & AM2_mask) >> 6) | ((userdata[instance]->external.alarm_seconds & AM1_mask) >> 7);
-    unsigned char AMx_old;
+    Uint8 AMx = ((userdata[instance]->external.alarm_day_date & AM4_mask) >> 4) | ((userdata[instance]->external.alarm_hours & AM3_mask) >> 5) | ((userdata[instance]->external.alarm_minutes & AM2_mask) >> 6) | ((userdata[instance]->external.alarm_seconds & AM1_mask) >> 7);
+    Uint8 AMx_old;
 
     int i;
 
@@ -982,7 +1013,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
     my_tzprintfpos( tz, 19, 10, "%02d:%02d:%02d", userdata[instance]->internal.hours, userdata[instance]->internal.minutes, userdata[instance]->internal.seconds);
 
     // Alarm
-    my_tzprintfpos( tz, 19, 12, "%02X:%02X:%02X", userdata[instance]->internal.alarm_hours & 0x3f, userdata[instance]->internal.alarm_minutes & 0x7f, userdata[instance]->internal.alarm_seconds & 0x7f);
+    my_tzprintfpos( tz, 19, 12, "%02d:%02d:%02d", userdata[instance]->internal.alarm_hours & 0x3f, userdata[instance]->internal.alarm_minutes & 0x7f, userdata[instance]->internal.alarm_seconds & 0x7f);
     my_tzprintfpos( tz, 19, 13, "%02X (%s)", userdata[instance]->external.alarm_day_date & 0x3f, userdata[instance]->external.alarm_day_date & 0x40 ? "Day " : "Date");
 
     my_tzprintfpos( tz, 19, 14, "%02X %%", AMx);
@@ -999,7 +1030,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
         // Control
         if (userdata[instance]->control_a != userdata_old[instance]->control_a)
         {
-            int j=13;
+            int j=12;
 
             mon_periphmod( 8, 6, 2, tz );
 
@@ -1010,7 +1041,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
 
         if (userdata[instance]->control_b != userdata_old[instance]->control_b)
         {
-            int j=13;
+            int j=12;
 
             mon_periphmod( 8, 7, 2, tz );
 
@@ -1104,7 +1135,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
             mon_periphmod( 25, 9, 2, tz );
 
         if (userdata[instance]->internal.year != userdata_old[instance]->internal.year)
-            mon_periphmod( 28, 9, 2, tz );
+            mon_periphmod( 27, 9, 2, tz );
 
         // Hour
         if (userdata[instance]->internal.hours != userdata_old[instance]->internal.hours)
@@ -1172,7 +1203,7 @@ void mon_plugin_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-unsigned char bin2bcd(unsigned char value)
+Uint8 bin2bcd(Uint8 value)
 {
     if (value >= 200)
         value -= 200;

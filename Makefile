@@ -42,7 +42,8 @@ VERSION_COPYRIGHTS = "$(APP_NAME) $(VERSION_FULL) $(COPYRIGHTS)"
 ####### DEFAULT SETTINGS HERE #######
 
 SRC_DIR = .
-VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/ch376 $(SRC_DIR)/plugins/twilighte_board $(SRC_DIR)/plugins/assinie
+# VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/ch376 $(SRC_DIR)/plugins/twilighte_board $(SRC_DIR)/plugins/assinie
+VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/twilighte_board $(SRC_DIR)/plugins/assinie
 
 ### extract git/svn revision
 GITREVISION = $(shell git rev-parse --short HEAD || svnversion -n $(SRC_DIR))

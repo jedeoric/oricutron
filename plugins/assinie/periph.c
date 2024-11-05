@@ -104,8 +104,8 @@ extern struct osdmenu menus[];
 struct PERIPH {
     char osditem;
     char name[PERIPH_NAME_LEN+1];
-    unsigned short addr_start;
-    unsigned short addr_end;
+    Uint16 addr_start;
+    Uint16 addr_end;
     unsigned int instance;
     SDL_bool enable;
     struct PLUGIN *periph;
@@ -132,7 +132,7 @@ struct osdmenuitem *periphitems;
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, unsigned short addr_start, SDL_bool enable)
+SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uint16 addr_start, SDL_bool enable)
 {
     if (plugin == NULL)
         return SDL_FALSE;
@@ -345,9 +345,10 @@ SDL_bool periph_shut_by_id(struct machine *oric, int id)
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
-unsigned char periph_read(struct machine *oric, unsigned short addr)
+Uint8 periph_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(addr);
+    Uint8 data = 0;
 
     if (i < nb_periph)
     {
@@ -355,19 +356,20 @@ unsigned char periph_read(struct machine *oric, unsigned short addr)
 
         // return periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start);
 
-        int data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_TRUE);
+        if (periph_table[i].periph->read != NULL)
+            data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_TRUE);
 
         // dbg_printf(" -> $%02x\n", data);
         return data;
     }
     // ERREUR: pas de périphérique pour l'adresse demandée
-    return (unsigned char) 0;
+    return (Uint8) 0;
 }
 
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
-SDL_bool periph_write(struct machine *oric, unsigned short addr, unsigned char data)
+SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
 {
     int i=periph_find_by_addr(addr);
 
@@ -375,7 +377,8 @@ SDL_bool periph_write(struct machine *oric, unsigned short addr, unsigned char d
     {
         // dbg_printf("PERIPH WRITE: %s ($%04x): $%02x (from $%04x)\n", periph_table[i].name, addr, data, oric->cpu.lastpc);
 
-        return periph_table[i].periph->write(oric, periph_table[i].instance, addr - periph_table[i].addr_start, data);
+        if (periph_table[i].periph->write != NULL)
+            return periph_table[i].periph->write(oric, periph_table[i].instance, addr - periph_table[i].addr_start, data);
     }
 
     // Pas de périphérique pour l'adresse demandée
@@ -397,7 +400,7 @@ int periph_find_by_name(char *name)
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
-int periph_find_by_addr(unsigned short addr)
+int periph_find_by_addr(Uint16 addr)
 {
     int i = 0;
 
@@ -409,7 +412,7 @@ int periph_find_by_addr(unsigned short addr)
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
-SDL_bool periph_present(unsigned short addr)
+SDL_bool periph_present(Uint16 addr)
 {
     return (periph_find_by_addr(addr) != nb_periph);
 }
@@ -524,20 +527,29 @@ SDL_bool mon_periph_enabled_by_id(int id)
     // -------------------------------------------------------------------------
     //
     // -------------------------------------------------------------------------
-unsigned char periph_mon_read(struct machine *oric, unsigned short addr)
+Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(addr);
 
     if (i < nb_periph)
     {
+        Uint8 data = 0;
+
         dbg_printf("PERIPH MON READ: %s ($%04x): (from: $%04x)", periph_table[i].name, addr, oric->cpu.lastpc);
         // return periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start);
-        int data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_FALSE);
-        dbg_printf(" -> $%02x\n", data);
+
+        if (periph_table[i].periph->read != NULL)
+        {
+            data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_FALSE);
+            dbg_printf(" -> $%02x\n", data);
+        }
+        else
+            dbg_printf("READ ONLY\n");
+
         return data;
     }
     // ERREUR: pas de périphérique pour l'adresse demandée
-    return (unsigned char) 0;
+    return (Uint8) 0;
 }
 
     // -------------------------------------------------------------------------
@@ -609,6 +621,8 @@ void mon_update_periph( struct machine *oric, int id )
 
     if (periph_table[id].periph->mon_update == NULL)
     {
+        dbg_printf("PERIPH: mon_update(%d) == NULL", id);
+
         tzprintfpos(ptz, 2, 2, "Name     : %s\n", periph_table[id].name);
         tzprintfpos(ptz, 2, 3, "Addresses: %04X -> %04X\n", periph_table[id].addr_start, periph_table[id].addr_end);
         tzprintfpos(ptz, 2, 4, "Enable   : %s\n", (periph_table[id].enable ? "yes" : "no"));
@@ -618,7 +632,7 @@ void mon_update_periph( struct machine *oric, int id )
         ptz->py = 6;
         tzputc( ptz, 6 );
 
-        for (int i=0; ptz->w-2; i++)
+        for (int i=0; i<ptz->w-2; i++)
             tzputc( ptz, 2 );
 
         tzputc( ptz, 8 );
@@ -731,10 +745,10 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
 #define STACK_SIZE 16
 
 struct STACK {
-  unsigned char data[STACK_SIZE];
-  unsigned char ptr;
-  unsigned char old_data[STACK_SIZE];
-  unsigned char old_ptr;
+  Uint8 data[STACK_SIZE];
+  Uint8 ptr;
+  Uint8 old_data[STACK_SIZE];
+  Uint8 old_ptr;
 };
 
 struct STACK stack_data;
@@ -759,7 +773,7 @@ SDL_bool stack_reset(struct machine *oric, void *userdata )
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char stack_read(struct machine *oric, void *userdata, unsigned short addr, SDL_bool run)
+Uint8 stack_read(struct machine *oric, void *userdata, Uint16 addr, SDL_bool run)
 {
     struct STACK *stack = (struct STACK *) userdata;
 
@@ -769,7 +783,7 @@ unsigned char stack_read(struct machine *oric, void *userdata, unsigned short ad
             if (run)
             {
                 // return stack->data[--stack->ptr];
-                stack->ptr = (unsigned char)(stack->ptr -1) % STACK_SIZE;
+                stack->ptr = (Uint8)(stack->ptr -1) % STACK_SIZE;
                 return stack->data[stack->ptr];
             }
             else
@@ -779,7 +793,7 @@ unsigned char stack_read(struct machine *oric, void *userdata, unsigned short ad
 
         default:
             dbg_printf("STACK READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -788,7 +802,7 @@ unsigned char stack_read(struct machine *oric, void *userdata, unsigned short ad
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool stack_write(struct machine *oric, void *userdata, unsigned short addr, unsigned char data)
+SDL_bool stack_write(struct machine *oric, void *userdata, Uint16 addr, Uint8 data)
 {
     struct STACK *stack = (struct STACK *) userdata;
 
@@ -806,7 +820,7 @@ SDL_bool stack_write(struct machine *oric, void *userdata, unsigned short addr, 
 
         default:
             dbg_printf("STACK WRITE: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
     return SDL_TRUE;
 }
@@ -814,7 +828,7 @@ SDL_bool stack_write(struct machine *oric, void *userdata, unsigned short addr, 
     // -------------------------------------------------------------------------
     //                  Mise à jour de la page du moniteur
     // -------------------------------------------------------------------------
-void mon_stack_update(struct textzone *tz, void *userdata, unsigned short base_addr, SDL_bool oldvalid)
+void mon_stack_update(struct textzone *tz, void *userdata, Uint16 base_addr, SDL_bool oldvalid)
 {
     struct STACK *stack = (struct STACK *) userdata;
 
@@ -884,9 +898,9 @@ void mon_stack_store(struct machine *oric, void *userdata)
 // -----------------------------------------------------------------------------
 
 struct REG {
-  unsigned short data;
+  Uint16 data;
   char incr;
-  unsigned short old_data;
+  Uint16 old_data;
   char old_incr;
 };
 
@@ -908,7 +922,7 @@ SDL_bool reg_reset(struct machine *oric, void *userdata )
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char reg_read(struct machine *oric, void *userdata, unsigned short addr, SDL_bool run)
+Uint8 reg_read(struct machine *oric, void *userdata, Uint16 addr, SDL_bool run)
 {
     struct REG *reg = (struct REG *) userdata;
 
@@ -925,7 +939,7 @@ unsigned char reg_read(struct machine *oric, void *userdata, unsigned short addr
 
         case 1:
         {
-            unsigned char data = reg->data >> 8;
+            Uint8 data = reg->data >> 8;
             if (run)
                 reg->data += reg->incr;
             return data;
@@ -935,7 +949,7 @@ unsigned char reg_read(struct machine *oric, void *userdata, unsigned short addr
 
         default:
             dbg_printf("REG_READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -944,7 +958,7 @@ unsigned char reg_read(struct machine *oric, void *userdata, unsigned short addr
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool reg_write(struct machine *oric, void *userdata, unsigned short addr, unsigned char data)
+SDL_bool reg_write(struct machine *oric, void *userdata, Uint16 addr, Uint8 data)
 {
     struct REG *reg = (struct REG *) userdata;
 
@@ -976,7 +990,7 @@ SDL_bool reg_write(struct machine *oric, void *userdata, unsigned short addr, un
     // -------------------------------------------------------------------------
     //                  Mise à jour de la page du moniteur
     // -------------------------------------------------------------------------
-void mon_reg_update(struct textzone *tz, void *userdata, unsigned short base_addr, SDL_bool oldvalid)
+void mon_reg_update(struct textzone *tz, void *userdata, Uint16 base_addr, SDL_bool oldvalid)
 {
     struct REG *reg = (struct REG *) userdata;
 
@@ -984,7 +998,7 @@ void mon_reg_update(struct textzone *tz, void *userdata, unsigned short base_add
 
     tzprintfpos( tz, 2, 2,  "Base address  : %04X", base_addr);
     tzprintfpos( tz, 2, 3,  "Register value: %04X", reg->data);
-    tzprintfpos( tz, 2, 4,  "Register incr.:   %02X", (unsigned char) reg->incr);
+    tzprintfpos( tz, 2, 4,  "Register incr.:   %02X", (Uint8) reg->incr);
 
 
     if (oldvalid)
@@ -1086,6 +1100,12 @@ SDL_bool periph_test(struct machine *oric)
         if (plugin != NULL)
             if (!periph_add(oric, plugin, NULL, 0, SDL_FALSE))
                 dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
+
+        plugin=load_plugin("libdebug.so");
+        if (plugin != NULL)
+            if (!periph_add(oric, plugin, NULL, 0, SDL_FALSE))
+                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
+
 
         // Création du menu OSD
         periphitems = calloc(nb_periph+3, sizeof(struct osdmenuitem));

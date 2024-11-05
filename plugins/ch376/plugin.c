@@ -140,10 +140,10 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool run)
+Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     if ( (!instance) || (instance > plugin_instances) )
-        return (unsigned char) 0;
+        return (Uint8) 0;
 
     instance--;
 
@@ -163,7 +163,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
 
         default:
             dbg_printf("CH376 READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -172,7 +172,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data)
+SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -193,7 +193,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
 
         default:
             dbg_printf("CH376 WRITE: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
     return SDL_TRUE;
 }
@@ -201,7 +201,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned shor
     // -------------------------------------------------------------------------
     //                  Mise à jour de la page du moniteur
     // -------------------------------------------------------------------------
-void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid)
+void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return;
@@ -241,6 +241,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
     my_tzprintfpos(tz, 2, 17, "SDCard : %-14s", userdata[instance]->sdcard_drive_path);
     my_tzprintfpos(tz, 2, 18, "USB    : %-14s", userdata[instance]->usb_drive_path);
 
+    my_tzprintfpos(tz, 2, 19, "File Pos: %10d", userdata[instance]->current_pos);
 
     if (oldvalid)
     {
@@ -278,6 +279,9 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, unsigned shor
 
         if (strcmp(userdata[instance]->usb_drive_path, userdata_old[instance]->usb_drive_path))
             mon_periphmod( 11, 18, strlen(userdata[instance]->usb_drive_path), tz );
+
+        if (userdata[instance]->current_pos != userdata_old[instance]->current_pos)
+            mon_periphmod( 12, 19, 10, tz );
     }
 
 }

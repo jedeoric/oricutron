@@ -128,5 +128,7 @@ struct ch376
 
     char *sdcard_drive_path;
     char *usb_drive_path;
+
+    CH376_S32 current_pos;
 };
 

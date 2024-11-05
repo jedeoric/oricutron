@@ -53,9 +53,9 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 #define INSTANCE_MAX 2
 
 struct REG {
-  unsigned short data;
+  Uint16 data;
   char incr;
-  unsigned short old_data;
+  Uint16 old_data;
   char old_incr;
 };
 
@@ -119,7 +119,7 @@ SDL_bool register_reset(struct machine *oric, unsigned int instance )
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-unsigned char register_read(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool run)
+Uint8 register_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     // On inccrémente après la lecture du MSB
     //
@@ -129,7 +129,7 @@ unsigned char register_read(struct machine *oric, unsigned int instance, unsigne
     //       contrairement à ce que fait le 6502
 
     if ( (!instance) || (instance > register_instances) )
-        return (unsigned char) 0;
+        return (Uint8) 0;
 
     instance--;
 
@@ -140,7 +140,7 @@ unsigned char register_read(struct machine *oric, unsigned int instance, unsigne
 
         case 1:
         {
-            unsigned char data = register_data[instance].data >> 8;
+            Uint8 data = register_data[instance].data >> 8;
             if (run)
                 register_data[instance].data += register_data[instance].incr;
             return data;
@@ -150,7 +150,7 @@ unsigned char register_read(struct machine *oric, unsigned int instance, unsigne
 
         default:
             dbg_printf("register_READ: bad address $%04x\n", addr);
-            return (unsigned char) 0;
+            return (Uint8) 0;
     }
 }
 
@@ -159,7 +159,7 @@ unsigned char register_read(struct machine *oric, unsigned int instance, unsigne
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool register_write(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data)
+SDL_bool register_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
 {
     // ATTENTION:
     //     - DOKE écrit d'abord le MSB puis le LSB
@@ -194,7 +194,7 @@ SDL_bool register_write(struct machine *oric, unsigned int instance, unsigned sh
     // -------------------------------------------------------------------------
     //                  Mise à jour de la page du moniteur
     // -------------------------------------------------------------------------
-void mon_register_update(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid)
+void mon_register_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
      if ( (!instance) || (instance > register_instances) )
         return;
@@ -205,7 +205,7 @@ void mon_register_update(struct textzone *tz, unsigned int instance, unsigned sh
 
     my_tzprintfpos( tz, 2, 2,  "Base address  : %04X", base_addr);
     my_tzprintfpos( tz, 2, 3,  "Register value: %04X", register_data[instance].data);
-    my_tzprintfpos( tz, 2, 4,  "Register incr.:   %02X", (unsigned char) register_data[instance].incr);
+    my_tzprintfpos( tz, 2, 4,  "Register incr.:   %02X", (Uint8) register_data[instance].incr);
 
 
     if (oldvalid)
