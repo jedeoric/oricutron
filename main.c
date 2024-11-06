@@ -640,6 +640,7 @@ static void load_config( struct start_opts *sto, struct machine *oric )
     if( read_config_bool(   &sto->lctmp[i], "diskautosave", &oric->diskautosave ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "ch376",        &oric->ch376_activated) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "twilighte_board",&oric->twilighteboard_activated) ) continue;
+    if( read_config_bool(   &sto->lctmp[i], "ds1501"      ,&oric->ds1501_activated) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "pravdiskautoboot", &oric->pravdiskautoboot ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "disable_menuscheme", &oric->disable_menuscheme ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "show_keyboard", &oric->show_keyboard ) ) continue;
@@ -792,6 +793,9 @@ SDL_bool init( struct machine *oric, int argc, char *argv[] )
   sto->start_snapshot[0] = 0;
   sto->start_breakpoint = NULL;
   oric->ch376_activated = SDL_FALSE;
+  oric->twilighteboard_activated = SDL_FALSE;
+  oric->ds1501_activated = SDL_FALSE;
+
   fullscreen          = SDL_FALSE;
 #ifdef WIN32
   hwsurface           = SDL_TRUE;

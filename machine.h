@@ -107,6 +107,7 @@ struct machine
   struct twilighte    *twilighte;
   SDL_bool            ch376_activated;
   SDL_bool            twilighteboard_activated;
+  SDL_bool            ds1501_activated;
   int                 tele_currbank;
   unsigned char       tele_banktype;
 

@@ -1217,7 +1217,7 @@ Uint8 bin2bcd(Uint8 value)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-struct PLUGIN plugin = { "DS1601",
+struct PLUGIN plugin = { "DS1501",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 plugin_create,
                 plugin_shutdown,
