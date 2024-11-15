@@ -18,6 +18,9 @@ struct PLUGIN {
 */
 #include "../../plugin.h"
 
+// -----------------------------------------------------------------------------
+//
+// -----------------------------------------------------------------------------
 SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uint16 addr_start, SDL_bool enable);
 
 SDL_bool periph_del(char *name);
@@ -61,4 +64,5 @@ void mon_periph_oldvalid(SDL_bool oldvalid);
 void mon_periphmod( int x, int y, int w, struct textzone *vtz );
 
 SDL_bool periph_test(struct machine *oric);
+SDL_bool load_devices_config(struct machine *oric);
 

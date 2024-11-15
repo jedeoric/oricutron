@@ -2115,7 +2115,7 @@ void mon_init( struct machine *oric )
   mshow = MSHOW_VIA;
   // [- Assinie
   MSHOW_LAST = MSHOW_PERIPH+mon_periph_count()+1;
-  printf("MSHOW_LAST = %d\n", MSHOW_LAST);
+  dbg_printf("MSHOW_LAST = %d\n", MSHOW_LAST);
   // -]
   cshow = CSHOW_CONSOLE;
   mon_asmmode = SDL_FALSE;

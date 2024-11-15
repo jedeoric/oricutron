@@ -12,11 +12,6 @@
 #include <proto/amigaguide.h>
 #endif
 
-// #include "../../system_sdl.h"
-// #include "../../system.h"
-// #include "../../machine.h"
-
-
 #include "../../system.h"
 #include "../../6502.h"
 #include "../../via.h"
@@ -28,67 +23,21 @@
 
 
 #include "../../machine.h"
+#include "../../main.h"
 
-/*
-#include "avi.h"
-#include "filereq.h"
-#include "main.h"
-#include "ula.h"
-#include "joystick.h"
-#include "tape.h"
-#include "keyboard.h"
-*/
-
+// #include "../../plugin.h"
 #include "periph.h"
 
 #include <dlfcn.h>
 
-// dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
-#define dbg_printf(x...) { printf(x); }
-//#define dbg_printf(x...)
+#ifdef DEBUG_PLUGIN
+    // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
+    // #define dbg_printf(x...) { printf(x); }
+    #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
+#else
+    #define dbg_printf(...)
+#endif
 
-/*
-jasmin:
-	addr_start: 0x3f4
-	add_end: 0x3ff+1
-	enable:
-
-microdisc:
-	([0x310, 0x314], 0x318)
-	addr_start: 0x310
-	addr_end: 0x31b+1
-	enable:
-
-bd500:
-	addr_start: 310
-	addr_stop: 0x323+1
-	enable:
-
-pravetz:
-	addr_start: 0x
-	addr_stop:
-	enable
-
-ch376:
-	addr_start: 0x340
-	addr_end: 0x341+1
-	enable:
-
-acia:
-	addr_start: acia_offset
-	addr_end: acia_offset+3+1
-	enable:
-
-via:
-	addr_start: 0x300
-	addr_end: 0x3ff+1
-	enable: true
-
-via2:
-	addr_start: 0x320
-	addr_end: 0x32f+1
-	enable:
-*/
 
 // -----------------------------------------------------------------------------
 //
@@ -119,15 +68,19 @@ void *library[MAX_PERIPH];
 unsigned int nb_library = 0;
 // void *handle;
 
-/*
-struct osdmenuitem periphitems[] = { { " Stack",            NULL,    0,      toggleperiph, 0, 0 },
-                                     { " Reg 0",            NULL,    0,      toggleperiph, 1, 0 },
-                                     { " Reg 1",            NULL,    0,      toggleperiph, 2, 0 },
-                                     { OSDMENUBAR,          NULL,    0,      NULL,         0, 0 },
-                                     { "Back",              "\x17", SDLK_BACKSPACE,gotomenu,   0, 0 },
-                                     { NULL, } };
-*/
 struct osdmenuitem *periphitems;
+
+struct plugin_opts
+{
+  char     lctmp[2048];
+  char     plugin[1024];
+  char     device[10+1];
+  SDL_bool enable;
+  SDL_bool load;
+  int      base_address;
+};
+
+
 
 // -----------------------------------------------------------------------------
 //
@@ -164,10 +117,6 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
 
     periph_table[i].periph = plugin;
 
-//    if (addr_start == 0)
-//        periph_table[i].addr_start = periph_table[i].periph->default_addr;
-//    else
-//        periph_table[i].addr_start = addr_start;
     periph_table[i].addr_start = addr_start;
 
     periph_table[i].addr_end = periph_table[i].addr_start + periph_table[i].periph->size - 1;
@@ -177,22 +126,22 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
 
     nb_periph++;
 
-    dbg_printf("Instance %d of %s created\n", instance, name);
+    dbg_printf("Instance %d of %s created\n", instance, plugin->name);
 
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_del(char *name)
 {
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_enable(char *name)
 {
     int i = periph_find_by_name(name);
@@ -204,9 +153,9 @@ SDL_bool periph_enable(char *name)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_enable_by_id(int id, SDL_bool enable)
 {
     dbg_printf("periph_enable_by_id(%d)\n", id);
@@ -219,9 +168,9 @@ SDL_bool periph_enable_by_id(int id, SDL_bool enable)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_disable(char *name)
 {
     int i = periph_find_by_name(name);
@@ -233,9 +182,9 @@ SDL_bool periph_disable(char *name)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_reset_by_name(struct machine *oric, char *name)
 {
     int i = periph_find_by_name(name);
@@ -249,9 +198,9 @@ SDL_bool periph_reset_by_name(struct machine *oric, char *name)
         return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_reset_by_id(struct machine *oric, int id)
 {
     if ( (id < 0) || (id >= nb_periph) )
@@ -264,9 +213,9 @@ SDL_bool periph_reset_by_id(struct machine *oric, int id)
         return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_reset_all(struct machine *oric)
 {
     int i=0;
@@ -283,9 +232,9 @@ SDL_bool periph_reset_all(struct machine *oric)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
 {
     int i=0;
@@ -302,9 +251,9 @@ SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 void shut_periph(struct machine *oric)
 {
     dbg_printf("*** Shutdown periph\n");
@@ -325,9 +274,9 @@ void shut_periph(struct machine *oric)
         dlclose(library[i]);
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_shut_by_id(struct machine *oric, int id)
 {
     if ( (id < 0) || (id >= nb_periph) )
@@ -342,9 +291,9 @@ SDL_bool periph_shut_by_id(struct machine *oric, int id)
         return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 Uint8 periph_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(addr);
@@ -366,9 +315,9 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
     return (Uint8) 0;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
 {
     int i=periph_find_by_addr(addr);
@@ -385,9 +334,9 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
     return SDL_FALSE;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 int periph_find_by_name(char *name)
 {
     int i = 0;
@@ -397,9 +346,9 @@ int periph_find_by_name(char *name)
     return i;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 int periph_find_by_addr(Uint16 addr)
 {
     int i = 0;
@@ -409,17 +358,17 @@ int periph_find_by_addr(Uint16 addr)
     return i;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_present(Uint16 addr)
 {
     return (periph_find_by_addr(addr) != nb_periph);
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_enabled_by_id(int id)
 {
     dbg_printf("periph_enabled_by_id(%d)\n", id);
@@ -430,9 +379,9 @@ SDL_bool periph_enabled_by_id(int id)
     return (periph_table[id].enable);
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 void periph_list()
 {
     if (nb_periph == 0)
@@ -448,9 +397,9 @@ void periph_list()
     }
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 void periph_display(int i)
 {
     if ( (i < 0) || (i >= nb_periph) )
@@ -473,42 +422,43 @@ void periph_display(int i)
 // Set the title of a textzone
 void my_tzsettitle( struct textzone *ptz, char *title )
 {
-  int ox, oy;
-  // makebox( ptz, 0, 0, ptz->w, ptz->h, menufc(SDL_FALSE), menubc(SDL_FALSE));
-  makebox( ptz, 0, 0, ptz->w, ptz->h, 2, 3);
-  if( !title ) return;
+    int ox, oy;
+    // makebox( ptz, 0, 0, ptz->w, ptz->h, menufc(SDL_FALSE), menubc(SDL_FALSE));
+    makebox( ptz, 0, 0, ptz->w, ptz->h, 2, 3);
+    if( !title ) return;
 
-  // tzsetcol( ptz, menufc(SDL_FALSE), menubc(SDL_FALSE));
-  tzsetcol( ptz, 2, 3);
-  ox = ptz->px;
-  oy = ptz->py;
-  ptz->px = 3;
-  ptz->py = 0;
-  tzstr( ptz, "[ " );
-  tzstr( ptz, title );
-  tzstr( ptz, " ]" );
-  ptz->px = ox;
-  ptz->py = oy;
+    // tzsetcol( ptz, menufc(SDL_FALSE), menubc(SDL_FALSE));
+    tzsetcol( ptz, 2, 3);
+    ox = ptz->px;
+    oy = ptz->py;
+    ptz->px = 3;
+    ptz->py = 0;
+    tzstr( ptz, "[ " );
+    tzstr( ptz, title );
+    tzstr( ptz, " ]" );
+    ptz->px = ox;
+    ptz->py = oy;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 // Copie de mon_viamod
 void mon_periphmod( int x, int y, int w, struct textzone *vtz )
 {
-  int offs, i;
+    int offs, i;
 
-  offs = y*vtz->w+x;
-  for( i=0; i<w; i++, offs++ )
-  {
-    vtz->fc[offs] = 1;
-    vtz->bc[offs] = 8;
-  }
+    offs = y*vtz->w+x;
+    for( i=0; i<w; i++, offs++ )
+    {
+        vtz->fc[offs] = 1;
+        vtz->bc[offs] = 8;
+    }
 }
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool mon_periph_enabled_by_id(int id)
 {
     dbg_printf("mon_periph_enabled_by_id(%d)\n", id);
@@ -524,9 +474,9 @@ SDL_bool mon_periph_enabled_by_id(int id)
     return ( periph_table[id].enable );
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(addr);
@@ -552,9 +502,9 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
     return (Uint8) 0;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 // void clear_textzone( struct machine *oric, int i );
 
 void mon_update_periph( struct machine *oric, int id )
@@ -563,8 +513,8 @@ void mon_update_periph( struct machine *oric, int id )
 
     dbg_printf("*** MON_UPDATE_PERIPH: view = %d\n", id);
 
-//    dbg_printf("W=%d, H=%d, X=%d, Y=%d\n", ptz->w, ptz->h, ptz->x, ptz->y);
-/*
+    // dbg_printf("W=%d, H=%d, X=%d, Y=%d\n", ptz->w, ptz->h, ptz->x, ptz->y);
+    /*
     if (view == 0)
     {
         my_tzsettitle(ptz, "Periph List");
@@ -583,7 +533,7 @@ void mon_update_periph( struct machine *oric, int id )
     tzstrpos(ptz, 1, 18, "123456789.123456789.12345678");
 
     return;
-*/
+    */
 
 
     if (nb_periph == 0)
@@ -592,7 +542,7 @@ void mon_update_periph( struct machine *oric, int id )
         return;
 
     }
-/*
+    /*
     else
     {
         int i=0;
@@ -608,7 +558,7 @@ void mon_update_periph( struct machine *oric, int id )
 
     return;
     }
-*/
+    */
     // int view = periph_find_by_name("STACK");
 
     if (id == nb_periph) return;
@@ -640,48 +590,26 @@ void mon_update_periph( struct machine *oric, int id )
         return;
     }
 
-//    my_tzsettitle(ptz, periph_table[id].name);
-//    clear_textzone(oric, TZ_PERIPH);
+    // my_tzsettitle(ptz, periph_table[id].name);
+    // clear_textzone(oric, TZ_PERIPH);
 
     periph_table[id].periph->mon_update(ptz, periph_table[id].instance, periph_table[id].addr_start, periph_oldvalid);
 
-    // 1: coin supérieur gauche
-    // 2: - trait horizontal milieu épais
-    // 3: T
-    // 4: coin supérieur droit
-    // 5: |
-    // 6: |-
-    // 7: -|-
-    // 8: -|
-    // 9: coin inférieur gauche |_
-    // 10:
-    // 11: coin inférieur droit _|
-    // 12: trait horizonral milieu fin (pointillés)
-    // 14: check mark
-    // 15: moitié gauche K7
-    // 16: moitié droite k7
-    // 17: bouton magnéto stop (carré plein)
-    // 18: bouton magnéto play
-    // 19: bouton magnéto eject
-    // 20: mpitié gauche D7
-    // 21: moitié droite D7
-    // 22: ...
-    // 23: <-
 
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 int mon_periph_count()
 {
     return nb_periph;
 }
 
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid)
 {
     dbg_printf("mon_store_state_periph(%d)\n", oldvalid);
@@ -695,9 +623,9 @@ void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid)
 }
 
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 void mon_periph_oldvalid(SDL_bool oldvalid)
 {
     dbg_printf("mon_periph_oldvalid(%d)\n", oldvalid);
@@ -705,9 +633,9 @@ void mon_periph_oldvalid(SDL_bool oldvalid)
     periph_oldvalid = oldvalid;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 // Toggle extension on/off
 void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
 {
@@ -732,296 +660,6 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
     mitem->name[0] = 14;
 }
 
-
-
-// *****************************************************************************
-//                      Extension Stack hardware
-// *****************************************************************************
-// PIle hardware 16 niveaux
-// 0000: pile
-// 0001: pointeur de pile
-// -----------------------------------------------------------------------------
-/*
-#define STACK_SIZE 16
-
-struct STACK {
-  Uint8 data[STACK_SIZE];
-  Uint8 ptr;
-  Uint8 old_data[STACK_SIZE];
-  Uint8 old_ptr;
-};
-
-struct STACK stack_data;
-
-// -----------------------------------------------------------------------------
-//
-// -----------------------------------------------------------------------------
-SDL_bool stack_reset(struct machine *oric, void *userdata )
-{
-    struct STACK *stack = (struct STACK *) userdata;
-
-    stack->ptr = 0;
-
-    // À voir si on initialise avec des données aléatoires au lieu de 0x00
-    memset(stack->data, 0x00, STACK_SIZE);
-
-    return SDL_TRUE;
-}
-
-    // -------------------------------------------------------------------------
-    //                          Lecture de la pile (POP)
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-Uint8 stack_read(struct machine *oric, void *userdata, Uint16 addr, SDL_bool run)
-{
-    struct STACK *stack = (struct STACK *) userdata;
-
-    switch (addr)
-    {
-        case 0:
-            if (run)
-            {
-                // return stack->data[--stack->ptr];
-                stack->ptr = (Uint8)(stack->ptr -1) % STACK_SIZE;
-                return stack->data[stack->ptr];
-            }
-            else
-                return stack->data[stack->ptr];
-        case 1:
-            return stack->ptr;
-
-        default:
-            dbg_printf("STACK READ: bad address $%04x\n", addr);
-            return (Uint8) 0;
-    }
-}
-
-    // -------------------------------------------------------------------------
-    //                      Ecriture dasn la pile (PUSH)
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-SDL_bool stack_write(struct machine *oric, void *userdata, Uint16 addr, Uint8 data)
-{
-    struct STACK *stack = (struct STACK *) userdata;
-
-    switch (addr)
-    {
-        case 0:
-            // stack->data[stack->ptr++] = data;
-            stack->data[stack->ptr] = data;
-            stack->ptr = (stack->ptr +1) % STACK_SIZE;
-            break;
-
-        case 1:
-            stack->ptr = data % 16;
-            break;
-
-        default:
-            dbg_printf("STACK WRITE: bad address $%04x\n", addr);
-            return (Uint8) 0;
-    }
-    return SDL_TRUE;
-}
-
-    // -------------------------------------------------------------------------
-    //                  Mise à jour de la page du moniteur
-    // -------------------------------------------------------------------------
-void mon_stack_update(struct textzone *tz, void *userdata, Uint16 base_addr, SDL_bool oldvalid)
-{
-    struct STACK *stack = (struct STACK *) userdata;
-
-    int i;
-
-    dbg_printf("STACK: mon update\n");
-
-    tzprintfpos( tz, 2, 2,  "Base address : %04X", base_addr);
-    tzprintfpos( tz, 2, 3,  "Stack pointer:   %02X", stack->ptr);
-    tzprintfpos( tz, 2, 4,  "Stack size   :   %02X", STACK_SIZE);
-
-    // Trait de séparation en ligne 6
-    tz->px = 0;
-    tz->py = 6;
-    tzputc( tz, 6 );
-
-    for (int i=0; i < tz->w-2; i++)
-//        tzputc( tz, 2 );
-        tzputc( tz, 12 );
-
-    tzputc( tz, 8 );
-
-    for (i=0; i<8; i++)
-    {
-        tzprintfpos(tz, 4, i+7, "%c %02X: %02X", (i==stack->ptr ? '>' : ' '), i, stack->data[i]);
-        tzprintfpos(tz, 4+12, i+7, "%c %02X: %02X", (i+8==stack->ptr ? '>' : ' '), i+8, stack->data[i+8]);
-    }
-
-
-    if (oldvalid)
-    {
-        if (stack->ptr != stack->old_ptr)
-            mon_periphmod( 19, 3, 2, tz );
-
-        for (i=0; i<8; i++)
-        {
-            if (stack->data[i] != stack->old_data[i])
-                mon_periphmod( 10, i+7, 2, tz );
-
-            if (stack->data[i+8] != stack->old_data[i+8])
-                mon_periphmod( 10+12, i+7, 2, tz );
-        }
-    }
-
-//    tzstrpos(tz, 1, 15, "....+....|....+....|....+...");
-}
-
-    // -------------------------------------------------------------------------
-    //                      Sauvegarde de l'état
-    // -------------------------------------------------------------------------
-void mon_stack_store(struct machine *oric, void *userdata)
-{
-    struct STACK *stack = (struct STACK *) userdata;
-
-    // Copy data+ptr
-    memcpy(stack->old_data, stack->data, STACK_SIZE+1);
-}
-*/
-
-/*
-// *****************************************************************************
-//                    Extension Registre avec auto-incrément
-// *****************************************************************************
-// Registre 16 bits avec post incrément
-// 0000-0001: registre
-// 0003     : incrément (signé)
-// -----------------------------------------------------------------------------
-
-struct REG {
-  Uint16 data;
-  char incr;
-  Uint16 old_data;
-  char old_incr;
-};
-
-struct REG reg_data[2];
-
-
-SDL_bool reg_reset(struct machine *oric, void *userdata )
-{
-    struct REG *reg = (struct REG *) userdata;
-
-    reg->incr = 0;
-    reg->data = 0;
-
-    return SDL_TRUE;
-}
-
-    // -------------------------------------------------------------------------
-    //                          Lecture du registre
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-Uint8 reg_read(struct machine *oric, void *userdata, Uint16 addr, SDL_bool run)
-{
-    struct REG *reg = (struct REG *) userdata;
-
-    // On inccrémente après la lecture du MSB
-    //
-    // ATTENTION:
-    //     - DEEK lit d'abord le MSB puis le LSB
-    //     - Oricutron lit d'abord le MSB puis le LSB pour un adressage indirect
-    //       contrairement à ce que fait le 6502
-    switch (addr & 0x0003)
-    {
-        case 0:
-            return reg->data & 0x00ff;
-
-        case 1:
-        {
-            Uint8 data = reg->data >> 8;
-            if (run)
-                reg->data += reg->incr;
-            return data;
-        }
-        case 2:
-            return reg->incr;
-
-        default:
-            dbg_printf("REG_READ: bad address $%04x\n", addr);
-            return (Uint8) 0;
-    }
-}
-
-    // -------------------------------------------------------------------------
-    //                      Ecriture dans le registre
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-SDL_bool reg_write(struct machine *oric, void *userdata, Uint16 addr, Uint8 data)
-{
-    struct REG *reg = (struct REG *) userdata;
-
-    // ATTENTION:
-    //     - DOKE écrit d'abord le MSB puis le LSB
-    //     - Oricutron lit d'abord le MSB puis le LSB pour un adressage indirect
-    //       contrairement à ce que fait le 6502
-
-    switch (addr & 0x0003)
-    {
-        case 0:
-            reg->data = (reg->data & 0xff00) | data;
-            return SDL_TRUE;
-
-        case 1:
-            reg->data = (reg->data & 0x00ff) | (data << 8);
-            return SDL_TRUE;
-
-        case 2:
-            reg->incr = data;
-            return SDL_TRUE;
-
-        default:
-            dbg_printf("REG_READ: address address $%04x\n", addr);
-            return SDL_FALSE;
-    }
-}
-
-    // -------------------------------------------------------------------------
-    //                  Mise à jour de la page du moniteur
-    // -------------------------------------------------------------------------
-void mon_reg_update(struct textzone *tz, void *userdata, Uint16 base_addr, SDL_bool oldvalid)
-{
-    struct REG *reg = (struct REG *) userdata;
-
-    dbg_printf("REG: mon update\n");
-
-    tzprintfpos( tz, 2, 2,  "Base address  : %04X", base_addr);
-    tzprintfpos( tz, 2, 3,  "Register value: %04X", reg->data);
-    tzprintfpos( tz, 2, 4,  "Register incr.:   %02X", (Uint8) reg->incr);
-
-
-    if (oldvalid)
-    {
-        if (reg->data != reg->old_data)
-            mon_periphmod( 18, 3, 4, tz );
-
-        if (reg->incr != reg->old_incr)
-            mon_periphmod( 20, 4, 2, tz );
-    }
-}
-
-    // -------------------------------------------------------------------------
-    //                      Sauvegarde de l'état
-    // -------------------------------------------------------------------------
-void mon_reg_store(struct machine *oric, void *userdata)
-{
-    struct REG *reg = (struct REG *) userdata;
-
-    reg->old_data = reg->data;
-    reg->old_incr = reg->incr;
-}
-*/
 
 // *****************************************************************************
 //                      Déclaratoin des extensions
@@ -1065,15 +703,18 @@ struct PLUGIN * load_plugin(char *library_name)
     return plugin;
 }
 
-    // -------------------------------------------------------------------------
-    //
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
 SDL_bool periph_test(struct machine *oric)
 {
-    struct PLUGIN *plugin;
+    // struct PLUGIN *plugin;
 
     if (!nb_periph)
     {
+        load_devices_config(oric);
+
+    /*
         // Déclaration des périphériques
         plugin=load_plugin("libstack.so");
         if (plugin != NULL)
@@ -1105,7 +746,7 @@ SDL_bool periph_test(struct machine *oric)
         if (plugin != NULL)
             if (!periph_add(oric, plugin, NULL, 0, SDL_FALSE))
                 dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-
+    */
 
         // Création du menu OSD
         periphitems = calloc(nb_periph+3, sizeof(struct osdmenuitem));
@@ -1146,3 +787,105 @@ SDL_bool periph_test(struct machine *oric)
 
     return SDL_TRUE;
 }
+
+
+// -------------------------------------------------------------------------
+//
+// -------------------------------------------------------------------------
+SDL_bool load_devices_config(struct machine *oric)
+{
+    struct PLUGIN *plugin;
+
+    struct plugin_opts *sto;
+    sto = malloc(sizeof(struct plugin_opts));
+
+    if (!sto) return SDL_FALSE;
+
+    FILE *f;
+    Sint32 i, j;
+    char config_path[4096];
+
+    char *device;
+
+    strcpy(config_path, "plugins.cfg");
+    add_fileprefix(config_path, 4096);
+    dbg_printf("Open plugins file: %s\n", config_path);
+
+    f = fopen(config_path, "r");
+    if (!f) return SDL_FALSE;
+
+    while ( !feof(f) )
+    {
+        if (!fgets(sto->lctmp, 2048, f)) break;
+
+        for (i=0; isws(sto->lctmp[i]); i++);
+
+        dbg_printf("[1]: %s", sto->lctmp);
+
+        while (sto->lctmp[i] == '[')
+        {
+            // On a un début de bloc
+
+            i++;
+            for (; isws(sto->lctmp[i]); i++);
+
+            dbg_printf("Found paragraph: %s", sto->lctmp+i);
+
+            sto->enable = SDL_FALSE;
+            sto->load = SDL_FALSE;
+            sto->plugin[0] = '\0';
+            sto->device[0] = '\0';
+            sto->base_address = 0;
+
+            do
+            {
+                if (fgets(sto->lctmp, 2048, f))
+                {
+                    for (i=0; isws(sto->lctmp[i]); i++);
+
+                    if ((sto->lctmp[i] != '\n') && (sto->lctmp[i] != ';'))
+                    {
+                        for (i=0; isws(sto->lctmp[i]); i++);
+
+                        if (read_config_bool(&sto->lctmp[i]  , "enable"      , &sto->enable)) continue;
+                        if (read_config_bool(&sto->lctmp[i]  , "load"        , &sto->load)) continue;
+                        if (read_config_path(&sto->lctmp[i]  , "plugin"      , sto->plugin, 1024)) continue;
+                        if (read_config_string(&sto->lctmp[i], "device"      , sto->device, 10+1)) continue;
+                        if (read_config_int(&sto->lctmp[i]   , "base_address", &sto->base_address, 0x0300-1, 0x03ff+1)) continue;
+
+                        // Si on arrive ici, on est soit au début d'un nouveau paragraphe, soit avec une option inconnue
+                        if (sto->lctmp[0] != '[')
+                            dbg_printf("\t\t[3]%s", sto->lctmp+i);
+                    }
+                }
+            } while (!feof(f) && sto->lctmp[i] != '[');
+
+            dbg_printf("\t[2]: loop\n");
+
+            dbg_printf("device: %s\n", sto->device);
+            dbg_printf("plugin: %s\n", sto->plugin);
+            dbg_printf("load: %s\n", (sto->load ? "yes" : "no"));
+            dbg_printf("enable: %s\n", (sto->enable ? "yes" : "no"));
+            dbg_printf("base address: 0x%x\n", sto->base_address);
+
+            if (sto->load && (sto->plugin[0] != '\0') && (((sto->base_address >= 0x300) && (sto->base_address <= 0x3ff)) || sto->base_address == 0))
+            {
+                plugin=load_plugin(sto->plugin);
+                if (plugin != NULL)
+                {
+                    device =  (sto->device[0] != '\0' ? sto->device : NULL);
+
+                    if (!periph_add(oric, plugin, device, sto->base_address, sto->enable))
+                        dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
+                }
+            }
+        }
+        dbg_printf("[1]: loop\n");
+    }
+    free(sto);
+    fclose(f);
+
+    return SDL_TRUE;
+}
+
+

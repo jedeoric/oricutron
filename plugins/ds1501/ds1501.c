@@ -28,8 +28,13 @@
 
 #include "plugin.h"
 
-// dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
-#define dbg_printf(x...) { printf(x); }
+#ifdef DEBUG_PLUGIN
+    // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
+    // #define dbg_printf(x...) { printf(x); }
+    #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
+#else
+    #define dbg_printf(...)
+#endif
 
 #define DS1501_SECONDS_REGISTER 0x360
 #define DS1501_MINUTES_REGISTER 0x361
@@ -604,6 +609,7 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, 
         // BLF1 | BLF2 | PRS | PAB | TDF | KSF | WDF | IRQF
         case 0x0e:
             // Les bits BLF1 et BLF2 sont read-only
+            // Permettre la modification de ces flags via le moniteur?
             userdata[instance]->control_a = (data & ~(BLF1_mask | BLF2_mask)) | (userdata[instance]->control_a & (BLF1_mask | BLF2_mask));
 
             if (userdata[instance]->control_a & KSF_mask)

@@ -400,9 +400,11 @@ FILEREQ_OBJ = filereq_gtk.o
 MSGBOX_OBJ = msgbox_gtk.o
 endif
 CFLAGS += -g $(SDL_CFLAGS) -D__OPENGL_AVAILABLE__ -DAUDIO_BUFLEN=1024 -D__CBCOPY__ -D__CBPASTE__
-LFLAGS += -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
+# LFLAGS += -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
+LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
-EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+# EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
 TARGET = $(TARGET_NAME)
 INSTALLDIR = /usr/local
 endif
@@ -420,9 +422,11 @@ FILEREQ_OBJ = filereq_gtk.o
 MSGBOX_OBJ = msgbox_gtk.o
 endif
 CFLAGS += -g $(SDL_CFLAGS) -D__OPENGL_AVAILABLE__ -DAUDIO_BUFLEN=1024 -D__CBCOPY__ -D__CBPASTE__
-LFLAGS += -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
+# LFLAGS += -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
+LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
-EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+# EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
 TARGET = $(TARGET_NAME)
 INSTALLDIR = /usr/local
 endif
@@ -441,9 +445,11 @@ LFLAGS += -m32
 endif
 STRIP :=  $(CROSS_COMPILE)$(STRIP)
 CFLAGS += -g $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --cflags) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config gtk+-3.0 --cflags) -D__CBCOPY__ -D__CBPASTE__
-LFLAGS += -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config gtk+-3.0 --libs) -lX11
+# LFLAGS += -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config gtk+-3.0 --libs) -lX11
+LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config gtk+-3.0 --libs) -lX11
 CUSTOMOBJS = gui_x11.o
-EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+# EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
 FILEREQ_OBJ = filereq_gtk.o
 MSGBOX_OBJ = msgbox_gtk.o
 TARGET = oricutron

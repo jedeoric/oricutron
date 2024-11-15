@@ -29,8 +29,13 @@
 
 #include "plugin.h"
 
-// dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
-#define dbg_printf(x...) { printf(x); }
+#ifdef DEBUG_PLUGIN
+    // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
+    // #define dbg_printf(x...) { printf(x); }
+    #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
+#else
+    #define dbg_printf(...)
+#endif
 
 // -----------------------------------------------------------------------------
 //
