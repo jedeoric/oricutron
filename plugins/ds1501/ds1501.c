@@ -27,7 +27,7 @@
 #include "../../machine.h"
 
 #include "plugin.h"
-
+#define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -50,6 +50,9 @@
 
 #define DS1501_CTRLA_REGISTER   0x36E
 #define DS1501_CTRLB_REGISTER   0x36F
+
+#define IRQB_DS1501 4
+#define IRQF_DS1501 (1 << IRQB_DS1501)
 
 // -----------------------------------------------------------------------------
 //
@@ -390,8 +393,10 @@ Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_
         {
             Uint8 data = userdata[instance]->control_a;
             if (run)
+            {
                 userdata[instance]->control_a &= ~(TDF_mask|KSF_mask|WDF_mask|IRQF_mask);
-
+                oric->cpu.irq &= ~IRQF_DS1501;
+            }
             return data;
         }
 
@@ -609,6 +614,9 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, 
         // BLF1 | BLF2 | PRS | PAB | TDF | KSF | WDF | IRQF
         case 0x0e:
             // Les bits BLF1 et BLF2 sont read-only
+            // Les bits PRS, PAB, KSF sont rw
+            // Les bits TDF et WDF peuvent être mis à 0 uniquement
+            // Le bit IRQF dépend de TDF, KSF et WDF
             // Permettre la modification de ces flags via le moniteur?
             userdata[instance]->control_a = (data & ~(BLF1_mask | BLF2_mask)) | (userdata[instance]->control_a & (BLF1_mask | BLF2_mask));
 
@@ -616,10 +624,11 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, 
             {
                     userdata[instance]->control_a &= ~PAB_mask;
 
+                    // TODO: Vérifier si le flag IRQF et l'IRQ sont levés même si TE=0
                     if ( userdata[instance]->control_b & KIE_mask)
                     {
                         userdata[instance]->control_a |= IRQF_mask;
-                        oric->cpu.irq = 1;
+                        oric->cpu.irq |= IRQF_DS1501;
                     }
             }
             break;
@@ -729,35 +738,40 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
             else
                 userdata[instance]->internal.watchdog_ms--;
 
-            // Time out?
+            // Time out? (mise à jour des flags uniquement si TE=1
             if (( userdata[instance]->internal.watchdog_ms == 0) && (userdata[instance]->internal.watchdog_s == 0) )
             {
-                userdata[instance]->control_a |= WDF_mask;
-
-                if (userdata[instance]->control_b & WDE_mask)
+                if (userdata[instance]->control_b & TE_mask)
                 {
-                    if (userdata[instance]->control_b & WDS_mask)
+                    userdata[instance]->control_a |= WDF_mask;
+
+                    if (userdata[instance]->control_b & WDE_mask)
                     {
-                        dbg_printf("DS1501: Watchdog reset system\n");
+                        if (userdata[instance]->control_b & WDS_mask)
+                        {
+                            dbg_printf("DS1501: Watchdog reset system\n");
 
-                        // oric->cpu-reset = 1;
+                            // oric->cpu-reset = 1;
 
-                        // WDE est mis à 0 après après l'impulsion RST
-                        userdata[instance]->control_b &= ~WDE_mask;
+                            // WDE est mis à 0 après après l'impulsion RST
+                            userdata[instance]->control_b &= ~WDE_mask;
+                        }
+                        else
+                        {
+                            dbg_printf("DS1501: Watchdog fire IRQ\n");
+
+                            // userdata[instance]->internal.watchdog_ms = userdata[instance]->internal_watchdog_ms;
+                            // userdata[instance]->internal.watchdog_s = userdata[instance]->internal_watchdog_s;
+
+                            // IRQ levée en fin de fonction
+                            // Tester un changement d'état de IRQF di on veut lever l'IRQ
+                            //uniquement sur un changement d'état de IRQ 0->1
+                            oric->cpu.irq |= IRQF_DS1501;
+                        }
+
+                        userdata[instance]->control_a |= IRQF_mask;
                     }
-                    else
-                    {
-                        dbg_printf("DS1501: Watchdog fire IRQ\n");
-
-                        // userdata[instance]->internal.watchdog_ms = userdata[instance]->internal_watchdog_ms;
-                        // userdata[instance]->internal.watchdog_s = userdata[instance]->internal_watchdog_s;
-
-                        oric->cpu.irq = 1;
-                    }
-
-                    userdata[instance]->control_a |= IRQF_mask;
                 }
-
                 // Reload Watchdog
                 // TODO: Vérifier si il faut le recharger au passage suivant plutôt que maintenant
                 // (sinon le si le CPU lit les registres Watchdogs à la reception de l'IRQ il ne verra pas 00.00)
@@ -903,7 +917,8 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                     dbg_printf("DS1501: AMx invalid %02X\n", AMx);
             }
 
-            if (alarm)
+            // Mise à jour des flags uniquement si TE=1
+            if (alarm && (userdata[instance]->control_b & TE_mask) )
             {
                 userdata[instance]->control_a |= TDF_mask;
 
@@ -911,7 +926,11 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                 {
                     dbg_printf("DS1501: Alarm IRQ\n");
                     userdata[instance]->control_a |= IRQF_mask;
-                    oric->cpu.irq = 1;
+
+                    // IRQ levée en fin de fonction?
+                    // Tester un changement d'état de IRQF di on veut lever l'IRQ
+                    //uniquement sur un changement d'état de IRQ 0->1
+                    oric->cpu.irq |= IRQF_DS1501;
                 }
 
                 if (userdata[instance]->control_b & TPE_mask)
@@ -922,6 +941,12 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
             }
         }
     }
+
+    // On lève une IRQ tant que IRQF= 1
+    // TODO: vérifier si une IRQ est levée uniquement si changement d'état de IRQF: 0->1
+    //       ou tant que IRQF =1
+    // if ( userdata[instance]->control_a & IRQF_mask)
+    //     oric->cpu.irq |= IRQF_DS1501;
 }
 
     // -------------------------------------------------------------------------
@@ -1106,7 +1131,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
             mon_periphmod( 8, 14, 2, tz );
 
             int j = 12;
-            for( i=128; i; i>>=1, j++ )
+            for( i=8; i; i>>=1, j++ )
                 if ((AMx & i) != (AMx_old & i))
                     mon_periphmod(j, 14, 1, tz);
         }
@@ -1177,7 +1202,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
             mon_periphmod( 19, 14, 2, tz );
 
             int j = 23;
-            for( i=128; i; i>>=1, j++ )
+            for( i=8; i; i>>=1, j++ )
                 if ((AMx & i) != (AMx_old & i))
                     mon_periphmod(j, 14, 1, tz);
         }
