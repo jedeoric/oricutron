@@ -43,7 +43,7 @@ VERSION_COPYRIGHTS = "$(APP_NAME) $(VERSION_FULL) $(COPYRIGHTS)"
 
 SRC_DIR = .
 # VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/ch376 $(SRC_DIR)/plugins/twilighte_board $(SRC_DIR)/plugins/assinie
-VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/twilighte_board $(SRC_DIR)/plugins/assinie
+VPATH = $(SRC_DIR) $(SRC_DIR)/plugins/assinie
 
 ### extract git/svn revision
 GITREVISION = $(shell git rev-parse --short HEAD || svnversion -n $(SRC_DIR))
@@ -382,7 +382,7 @@ CFLAGS += -g $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(S
 LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
 # EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
-EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = periph.o
 TARGET = oricutron
 INSTALLDIR = /usr/local
 endif
@@ -404,7 +404,7 @@ CFLAGS += -g $(SDL_CFLAGS) -D__OPENGL_AVAILABLE__ -DAUDIO_BUFLEN=1024 -D__CBCOPY
 LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
 # EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
-EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = periph.o
 TARGET = $(TARGET_NAME)
 INSTALLDIR = /usr/local
 endif
@@ -426,7 +426,7 @@ CFLAGS += -g $(SDL_CFLAGS) -D__OPENGL_AVAILABLE__ -DAUDIO_BUFLEN=1024 -D__CBCOPY
 LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(SDL_LFLAGS) -lGL -lX11
 CUSTOMOBJS = gui_x11.o
 # EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
-EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = periph.o
 TARGET = $(TARGET_NAME)
 INSTALLDIR = /usr/local
 endif
@@ -449,7 +449,7 @@ CFLAGS += -g $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(S
 LFLAGS += -ldl -Wl,-rpath='plugins' -lm -L/usr/$(BASELIBDIR) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config $(SDL_LIB) --libs) $(shell PKG_CONFIG_PATH=/usr/$(BASELIBDIR)/pkgconfig pkg-config gtk+-3.0 --libs) -lX11
 CUSTOMOBJS = gui_x11.o
 # EXTRAOBJS = oric_ch376_plugin.o ch376.o oric_twilighte_board_plugin.o periph.o
-EXTRAOBJS = oric_twilighte_board_plugin.o periph.o
+EXTRAOBJS = periph.o
 FILEREQ_OBJ = filereq_gtk.o
 MSGBOX_OBJ = msgbox_gtk.o
 TARGET = oricutron

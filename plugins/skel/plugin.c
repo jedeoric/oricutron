@@ -35,6 +35,7 @@
 
 #include "plugin.h"
 
+#define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -62,8 +63,11 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 //
 // -----------------------------------------------------------------------------
 // Adresse de base et de fin par défaut d'un périphérique
-#define BASE_ADDR 0x360
-#define END_ADDR 0x361
+// #define BASE_ADDR 0x360
+// #define END_ADDR 0x361
+
+#define BASE_ADDR 0xC256
+#define END_ADDR 0xC256
 
 // On ne peut instancier qu'un seul périphérique
 #define INSTANCE_MAX 1
@@ -109,11 +113,37 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 // -----------------------------------------------------------------------------
 //                              plugin_create
 // -----------------------------------------------------------------------------
+// Called to check plugin addresses (if multiples addresses)
+SDL_bool plugin_addresses(unsigned int instance,  Uint16 offset)
+{
+    if ( (!instance) || (instance > plugin_instances) )
+        return SDL_FALSE;
+
+    dbg_printf("---plugin addresses(%04x)\n", offset);
+
+    instance--;
+
+    // [base_addr, base_addr+5]
+    if (offset <= 0x05)
+        return SDL_TRUE;
+
+    // [base_addr+0x10, base_addr+0x15]
+    if ((offset >= 0x10) && (offset <= 0x15))
+        return SDL_TRUE;
+
+    return SDL_FALSE;
+}
+
+// -----------------------------------------------------------------------------
+//                              plugin_create
+// -----------------------------------------------------------------------------
 // Called to create a new instance of the extension
 unsigned int plugin_create(struct machine *oric)
 {
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
+
+//    oric->romdis = SDL_FALSE;
 
     return ++plugin_instances;
 }
@@ -134,7 +164,7 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 // Called by init_machine and [F4]
 SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
 {
-    dbg_printf("stack_reset(%d)\n", instance);
+    dbg_printf("plugin_reset(%d)\n", instance);
 
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -154,12 +184,14 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Read access
-Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 offset, SDL_bool run)
+Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
     instance--;
+
+    dbg_printf("plugin_read(%d)\n", offset);
 
     switch (offset)
     {
@@ -175,8 +207,20 @@ Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 offset, SD
         case 1:
             return userdata[instance].ptr;
 
+        case 0x10:
+            if (run)
+            {
+                // return userdata[instance].data[--userdata[instance].ptr];
+                userdata[instance].ptr = (Uint8)(userdata[instance].ptr -1) % DATA_SIZE;
+                return userdata[instance].data[userdata[instance].ptr];
+            }
+            else
+                return userdata[instance].data[userdata[instance].ptr];
+        case 0x11:
+            return userdata[instance].ptr;
+
         default:
-            dbg_printf("STACK READ: bad address $%04x\n", offset);
+            dbg_printf("PLUGIN READ: bad address $%04x\n", offset);
             return (Uint8) 0;
     }
 }
@@ -186,7 +230,7 @@ Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 offset, SD
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Write access
-SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 offset, Uint8 data)
+SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -205,8 +249,18 @@ SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 offset
             userdata[instance].ptr = data % 16;
             break;
 
+        case 0x10:
+            // userdata[instance].data[userdata[instance].ptr++] = data;
+            userdata[instance].data[userdata[instance].ptr] = data;
+            userdata[instance].ptr = (userdata[instance].ptr +1) % DATA_SIZE;
+            break;
+
+        case 0x11:
+            userdata[instance].ptr = data % 16;
+            break;
+
         default:
-            dbg_printf("STACK WRITE: bad address $%04x\n", offset);
+            dbg_printf("PLUGIN WRITE: bad address $%04x\n", offset);
             return (Uint8) 0;
     }
     return SDL_TRUE;
@@ -246,7 +300,7 @@ void mon_plugin_update(struct textzone *ptz, unsigned int instance, Uint16 base_
 
     int i;
 
-    dbg_printf("STACK: mon update\n");
+    dbg_printf("PLUGIN: mon update\n");
 
     my_tzprintfpos( ptz, 2, 2,  "Base address : %04X", base_addr);
     my_tzprintfpos( ptz, 2, 3,  "Stack pointer:   %02X", userdata[instance].ptr);
@@ -307,6 +361,9 @@ void mon_plugin_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "PLUGIN",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
+                // PLG_DEVICE | PLG_MULTI,
+                PLG_BANK,
+                plugin_addresses,
                 plugin_create,
                 plugin_shutdown,
                 plugin_reset,

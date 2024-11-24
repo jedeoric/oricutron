@@ -8,7 +8,6 @@
  *   Christian 'Assinie' Lardière                                   *
  *                                                                  *
  ** ch376.c *********************************************************/
-#define DEBUG_CH376
 /*
  Changes:
 

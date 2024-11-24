@@ -1,15 +1,21 @@
 #define PERIPH_NAME_LEN 10
 
+#define PLG_DEVICE 1
+#define PLG_BANK 2
+#define PLG_MULTI 4
+
 struct PLUGIN {
     char name[PERIPH_NAME_LEN+1];
     Uint16 default_addr;
     Uint16 size;
+    Uint16 type;
+    SDL_bool (*addresses)(unsigned int instance, Uint16 offset);
     unsigned int (*create)(struct machine *oric);
     SDL_bool (*shutdown)(struct machine *oric, unsigned int instance);
 
     SDL_bool (*reset)(struct machine *oric, unsigned int instance);
-    Uint8 (*read)(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool fexec);
-    SDL_bool (*write)(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data);
+    Uint8 (*read)(struct machine *oric, SDL_bool fbank, unsigned int instance, Uint16 addr, SDL_bool fexec);
+    SDL_bool (*write)(struct machine *oric, SDL_bool fbank, unsigned int instance, Uint16 addr, Uint8 data);
 
     void (*ticktock)(struct machine *oric, unsigned int instance, int cycles);
 

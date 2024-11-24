@@ -35,7 +35,9 @@
 #include "machine.h"
 #include "joystick.h"
 
-#include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+// [Assinie--
+// #include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+// --]
 
 struct keyjoydef
 {
@@ -248,11 +250,15 @@ void joy_buildmask( struct machine *oric )
   Uint8 mkmask_f = 0xff;
   Uint8 joysel = oric->via.read_port_a( &oric->via );
   Uint8 telestrat_joysel = oric->tele_via.read_port_b( &oric->tele_via );
-  Uint8 twilighteboard_joysel = 0;
+  // [Assinie--
+  //Uint8 twilighteboard_joysel = 0;
+  // --]
 
   SDL_bool gimme_port_a = SDL_FALSE;
   SDL_bool gimme_port_b = SDL_FALSE;
 
+  // [Assinie--
+#if 0
   if (oric->twilighteboard_activated)
     twilighteboard_joysel= twilighteboard_oric_read(oric->twilighte,0x320);
 
@@ -297,6 +303,10 @@ void joy_buildmask( struct machine *oric )
     }
   }
   else if (oric->type == MACH_TELESTRAT)
+#endif
+
+  if (oric->type == MACH_TELESTRAT)
+  // --]
   {
     if ( telestrat_joysel & 0x80 )
     {

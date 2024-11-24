@@ -145,7 +145,7 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
@@ -177,7 +177,7 @@ Uint8 plugin_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool plugin_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -450,6 +450,8 @@ static char *usb_mode_to_str(CH376_U8 mode)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "CH376",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
+                PLG_DEVICE,
+                NULL,
                 plugin_create,
                 plugin_shutdown,
                 plugin_reset,

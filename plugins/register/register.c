@@ -124,7 +124,7 @@ SDL_bool register_reset(struct machine *oric, unsigned int instance )
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-Uint8 register_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 register_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     // On inccrémente après la lecture du MSB
     //
@@ -164,7 +164,7 @@ Uint8 register_read(struct machine *oric, unsigned int instance, Uint16 addr, SD
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool register_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool register_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     // ATTENTION:
     //     - DOKE écrit d'abord le MSB puis le LSB
@@ -242,6 +242,8 @@ void mon_register_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "REGISTER",
                 0x0362, 3,
+                PLG_DEVICE,
+                NULL,
                 register_create,
                 register_shutdown,
                 register_reset,

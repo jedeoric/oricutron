@@ -129,7 +129,7 @@ SDL_bool stack_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-Uint8 stack_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 stack_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     if ( (!instance) || (instance > stack_instances) )
         return (Uint8) 0;
@@ -161,7 +161,7 @@ Uint8 stack_read(struct machine *oric, unsigned int instance, Uint16 addr, SDL_b
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool stack_write(struct machine *oric, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool stack_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     if ( (!instance) || (instance > stack_instances) )
         return SDL_FALSE;
@@ -260,6 +260,8 @@ void mon_stack_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "STACK",
                 0x0360, 2,
+                PLG_DEVICE,
+                NULL,
                 stack_create,
                 stack_shutdown,
                 stack_reset,

@@ -38,8 +38,8 @@ enum
   TZ_VIA2,
   TZ_AY,
   TZ_DISK,
-  TZ_TWIL,
   // [-Assinie
+  // TZ_TWIL,
   TZ_PERIPH,
   // -]
   TZ_MENU,

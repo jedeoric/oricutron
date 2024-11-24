@@ -30,6 +30,7 @@
 
 #include <dlfcn.h>
 
+// #define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -48,13 +49,14 @@ extern struct osdmenu menus[];
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-#define MAX_PERIPH 10
+#define MAX_PERIPH 20
 
 struct PERIPH {
     char osditem;
     char name[PERIPH_NAME_LEN+1];
     Uint16 addr_start;
     Uint16 addr_end;
+    Uint16 type;
     unsigned int instance;
     SDL_bool enable;
     struct PLUGIN *periph;
@@ -123,6 +125,7 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
 
     periph_table[i].enable = enable;
 
+    periph_table[i].type = periph_table[i].periph->type;
 
     nb_periph++;
 
@@ -229,6 +232,7 @@ SDL_bool periph_reset_all(struct machine *oric)
         }
         i++;
     }
+    oric->romdis = SDL_TRUE;
     return SDL_TRUE;
 }
 
@@ -296,7 +300,9 @@ SDL_bool periph_shut_by_id(struct machine *oric, int id)
 // -------------------------------------------------------------------------
 Uint8 periph_read(struct machine *oric, Uint16 addr)
 {
-    int i=periph_find_by_addr(addr);
+    SDL_bool fBank = SDL_FALSE;
+
+    int i=periph_find_by_addr(oric, addr);
     Uint8 data = 0;
 
     if (i < nb_periph)
@@ -305,8 +311,16 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
 
         // return periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start);
 
+        if (addr >= 0xc000)
+        {
+            fBank = SDL_TRUE;
+            addr = addr - 0xc000;
+        }
+        else
+            addr = addr - periph_table[i].addr_start;
+
         if (periph_table[i].periph->read != NULL)
-            data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_TRUE);
+            data = periph_table[i].periph->read(oric, fBank, periph_table[i].instance, addr, SDL_TRUE);
 
         // dbg_printf(" -> $%02x\n", data);
         return data;
@@ -320,14 +334,20 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
 // -------------------------------------------------------------------------
 SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
 {
-    int i=periph_find_by_addr(addr);
+    int i=periph_find_by_addr(oric, addr);
+    SDL_bool fbank = (addr >= 0xc000);
 
     if (i < nb_periph)
     {
         // dbg_printf("PERIPH WRITE: %s ($%04x): $%02x (from $%04x)\n", periph_table[i].name, addr, data, oric->cpu.lastpc);
 
+        if (fbank)
+            addr = addr - 0xc000;
+        else
+            addr = addr - periph_table[i].addr_start;
+
         if (periph_table[i].periph->write != NULL)
-            return periph_table[i].periph->write(oric, periph_table[i].instance, addr - periph_table[i].addr_start, data);
+            return periph_table[i].periph->write(oric, fbank, periph_table[i].instance, addr, data);
     }
 
     // Pas de périphérique pour l'adresse demandée
@@ -349,11 +369,62 @@ int periph_find_by_name(char *name)
 // -------------------------------------------------------------------------
 //
 // -------------------------------------------------------------------------
-int periph_find_by_addr(Uint16 addr)
+int periph_find_by_addr(struct machine *oric, Uint16 addr)
 {
     int i = 0;
 
-    while ((i < nb_periph) && ((periph_table[i].enable == SDL_FALSE) || (addr < periph_table[i].addr_start) || (addr > periph_table[i].addr_end))) i++;
+    // Si accès à la rom interne -> fin
+    if ((addr >= 0xc000) && (!oric->romdis))
+        return nb_periph;
+
+    dbg_printf("periph_find_by_addr(0x%04x)... ", addr);
+
+    // while ((i < nb_periph) && ((periph_table[i].enable == SDL_FALSE) || (addr < periph_table[i].addr_start) || (addr > periph_table[i].addr_end))) i++;
+
+    if (addr >= 0xc000)
+        while (
+            (i < nb_periph) &&
+                (
+                    ( periph_table[i].enable == SDL_FALSE ) ||
+                    ( !(periph_table[i].type & PLG_BANK) )
+                )
+            ) i++;
+/*
+        while (
+            (i < nb_periph) &&
+                (
+                    ( periph_table[i].enable == SDL_FALSE ) ||
+                    ( !(periph_table[i].type & PLG_BANK) ) ||
+                    ( (periph_table[i].periph->addresses == NULL) && ((addr < periph_table[i].addr_start) || (addr > periph_table[i].addr_end)) ) ||
+                    ( (periph_table[i].periph->addresses != NULL) && !periph_table[i].periph->addresses(periph_table[i].instance, addr - periph_table[i].addr_start) )
+                )
+            ) i++;
+*/
+    else
+        while (
+            (i < nb_periph) &&
+                (
+                    ( periph_table[i].enable == SDL_FALSE) ||
+                    ( !(periph_table[i].type & PLG_DEVICE) ) ||
+                    ( (periph_table[i].periph->addresses == NULL) && ((addr < periph_table[i].addr_start) || (addr > periph_table[i].addr_end)) ) ||
+                    ( (periph_table[i].periph->addresses != NULL) && !periph_table[i].periph->addresses(periph_table[i].instance, addr - periph_table[i].addr_start) )
+                )
+            ) i++;
+
+/*
+        while (
+            (i < nb_periph) &&
+                (
+                    (periph_table[i].enable == SDL_FALSE) ||
+                    ( !(periph_table[i].type & PLG_DEVICE) ) ||
+                    ( addr < periph_table[i].addr_start ) ||
+                    ( (periph_table[i].periph->addresses == NULL) && (addr > periph_table[i].addr_end) ) ||
+                    ( (periph_table[i].periph->addresses != NULL) && !periph_table[i].periph->addresses(periph_table[i].instance, addr) )
+                )
+            ) i++;
+*/
+
+    dbg_printf("%d\n", i);
 
     return i;
 }
@@ -361,9 +432,9 @@ int periph_find_by_addr(Uint16 addr)
 // -------------------------------------------------------------------------
 //
 // -------------------------------------------------------------------------
-SDL_bool periph_present(Uint16 addr)
+SDL_bool periph_present(struct machine *oric, Uint16 addr)
 {
-    return (periph_find_by_addr(addr) != nb_periph);
+    return (periph_find_by_addr(oric, addr) != nb_periph);
 }
 
 // -------------------------------------------------------------------------
@@ -404,14 +475,16 @@ void periph_display(int i)
 {
     if ( (i < 0) || (i >= nb_periph) )
     {
-        dbg_printf("Periph out of range: %d\n", i);
+        error_printf("Periph out of range: %d", i);
     }
     else
     {
-        dbg_printf("Periph name: %s\n", periph_table[i].name);
-        dbg_printf("Periph addresses: [%04X, %04X]\n", periph_table[i].addr_start, periph_table[i].addr_end);
-        dbg_printf("Periph enable: %s\n", (periph_table[i].enable ? "yes" : "no"));
-        dbg_printf("\n");
+        error_printf("Periph name: %s", periph_table[i].name);
+        error_printf("Periph instance: %d", periph_table[i].instance);
+        error_printf("Periph addresses: [%04X, %04X]", periph_table[i].addr_start, periph_table[i].addr_end);
+        error_printf("Periph enable: %s", (periph_table[i].enable ? "yes" : "no"));
+        error_printf("Periph type : 0x%02X", periph_table[i].type);
+        error_printf("");
     }
 }
 
@@ -479,7 +552,7 @@ SDL_bool mon_periph_enabled_by_id(int id)
 // -------------------------------------------------------------------------
 Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
 {
-    int i=periph_find_by_addr(addr);
+    int i=periph_find_by_addr(oric, addr);
 
     if (i < nb_periph)
     {
@@ -490,11 +563,16 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
 
         if (periph_table[i].periph->read != NULL)
         {
-            data = periph_table[i].periph->read(oric, periph_table[i].instance, addr - periph_table[i].addr_start, SDL_FALSE);
+            if (addr >= 0xc000)
+                addr = addr - 0xc000;
+            else
+                addr = addr - periph_table[i].addr_start;
+
+            data = periph_table[i].periph->read(oric, (addr >= 0xc000), periph_table[i].instance, addr, SDL_FALSE);
             dbg_printf(" -> $%02x\n", data);
         }
         else
-            dbg_printf("READ ONLY\n");
+            dbg_printf("WRITE ONLY\n");
 
         return data;
     }
@@ -574,8 +652,9 @@ void mon_update_periph( struct machine *oric, int id )
         dbg_printf("PERIPH: mon_update(%d) == NULL", id);
 
         tzprintfpos(ptz, 2, 2, "Name     : %s\n", periph_table[id].name);
-        tzprintfpos(ptz, 2, 3, "Addresses: %04X -> %04X\n", periph_table[id].addr_start, periph_table[id].addr_end);
+        tzprintfpos(ptz, 2, 3, "Addresses: $%04X -> $%04X\n", periph_table[id].addr_start, periph_table[id].addr_end);
         tzprintfpos(ptz, 2, 4, "Enable   : %s\n", (periph_table[id].enable ? "yes" : "no"));
+        tzprintfpos(ptz, 2, 5, "Type     : $%02X\n", periph_table[id].type);
 
         // Trait de séparation en ligne 6
         ptz->px = 0;
@@ -802,7 +881,7 @@ SDL_bool load_devices_config(struct machine *oric)
     if (!sto) return SDL_FALSE;
 
     FILE *f;
-    Sint32 i, j;
+    Sint32 i;
     char config_path[4096];
 
     char *device;

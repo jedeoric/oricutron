@@ -135,7 +135,7 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     // Read access
-unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned short addr, SDL_bool run)
+unsigned char plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, unsigned short addr, SDL_bool run)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return (unsigned char) 0;
@@ -150,7 +150,7 @@ unsigned char plugin_read(struct machine *oric, unsigned int instance, unsigned 
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     // Write access
-SDL_bool plugin_write(struct machine *oric, unsigned int instance, unsigned short addr, unsigned char data)
+SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, unsigned short addr, unsigned char data)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -214,6 +214,8 @@ void mon_plugin_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "DEBUG",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
+                PLG_DEVICE,
+                NULL,
                 plugin_create,
                 plugin_shutdown,
                 plugin_reset,

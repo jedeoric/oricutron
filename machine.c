@@ -46,7 +46,9 @@
 #include "plugins/ch376/ch376.h"
 #include "plugins/ch376/oric_ch376_plugin.h"
 
-#include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+// [Assinie--
+// #include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+// --]
 
 // [Assinie--
 #include "plugins/assinie/periph.h"
@@ -88,7 +90,6 @@ SDL_bool microdiscrom_valid, bd500rom_valid, jasminrom_valid, pravetzrom_valid;
 extern struct osdmenuitem mainitems[];
 
 static SDL_bool load_rom( struct machine *oric, char *fname, int size, unsigned char *where, struct symboltable *stab, int symflags );
-
 
 Uint8 oricpalette[] = { 0x00, 0x00, 0x00,
                         0xff, 0x00, 0x00,
@@ -304,6 +305,8 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
     if( oric->aciabackend && ( oric->aciaoffset <= addr && addr < oric->aciaoffset+4 ) )
       return acia_read( &oric->tele_acia, addr );
 
+// [Assinie--
+/*
     if( oric->twilighteboard_activated)
     {
       if ((0x342 <= addr  && addr < 0x344 ) || (0x320 <= addr && addr < 0x330 ))
@@ -316,11 +319,12 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
       }
 
     }
+*/
+// --]
 
     // [Assinie] - Tests
     // [--
-
-    if (periph_present(addr))
+    if (periph_present(oric, addr))
         return periph_read(oric, addr);
     // --]
 
@@ -329,15 +333,27 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
 
   if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) {
 
-    if (oric->twilighteboard_activated)
-      return twilighteboard_oric_ROM_RAM_read(oric->twilighte,addr-0xc000);
-    else
-      return oric->rom[addr-0xc000];
-  }
     // [Assinie] - Tests
     // [--
 
-    if (periph_present(addr))
+    // if (periph_present(oric, addr))
+    //    return periph_read(oric, addr);
+    // --]
+
+    // [Assinie--
+/*
+     if (oric->twilighteboard_activated)
+        return twilighteboard_oric_ROM_RAM_read(oric->twilighte,addr-0xc000);
+     else
+*/
+        return oric->rom[addr-0xc000];
+
+    // --]
+    }
+
+    // [Assinie] - Tests
+    // [--
+    if ( (oric->romdis) && (addr >= 0xc000) && periph_present(oric, addr) )
         return periph_read(oric, addr);
     // --]
 
@@ -432,9 +448,16 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
   struct machine *oric = (struct machine *)cpu->userdata;
 
 
-  if (oric->twilighteboard_activated &&  addr >= 0xc000  )
-    twilighteboard_oric_ROM_RAM_write(oric->twilighte,addr-0xc000,data);
-  else
+  // [Assinie--
+  // if (oric->twilighteboard_activated &&  addr >= 0xc000  )
+  //   twilighteboard_oric_ROM_RAM_write(oric->twilighte,addr-0xc000,data);
+  // else
+  if ( (oric->romdis) && ( addr >= 0xc000) && periph_present(oric, addr) )
+  {
+      periph_write(oric, addr, data);
+      return;
+  }
+  // --]
   if( ( !oric->romdis ) && ( addr >= 0xc000 ) ) return;  // Can't write to ROM!
 
   if( ( addr & 0xff00 ) == 0x0300 )
@@ -443,19 +466,21 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
       acia_write( &oric->tele_acia, addr, data );
 
 
-    else if(oric->twilighteboard_activated && ((0x342 <= addr && addr < 0x344 ) || (0x320 <= addr && addr < 0x330 )))
-      twilighteboard_oric_write(oric->twilighte,addr,0x00,data);
+    // [Assinie--
+    // else if(oric->twilighteboard_activated && ((0x342 <= addr && addr < 0x344 ) || (0x320 <= addr && addr < 0x330 )))
+    //   twilighteboard_oric_write(oric->twilighte,addr,0x00,data);
 
-    else if(oric->twilighteboard_activated && oric->twilighte->microdisc==SDL_TRUE && (0x310 <= addr && addr < 0x319 ))
-      {
-      if (addr==0x314)
-        twilighteboard_oric_write(oric->twilighte,addr,0x00,data);
-      microdisc_write( &oric->md, addr, data );
-      }
+    // else if(oric->twilighteboard_activated && oric->twilighte->microdisc==SDL_TRUE && (0x310 <= addr && addr < 0x319 ))
+    //  {
+    //    if (addr==0x314)
+    //      twilighteboard_oric_write(oric->twilighte,addr,0x00,data);
+    //    microdisc_write( &oric->md, addr, data );
+    //  }
+    // --]
 
     // [Assinie] - Tests
     // [--
-    else if (periph_present(addr))
+    else if (periph_present(oric, addr))
     {
         periph_write(oric, addr, data);
         return;
@@ -469,11 +494,11 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
 
     // [Assinie] - Tests
     // [--
-    else if (periph_present(addr))
-    {
-        periph_write(oric, addr, data);
-        return;
-    }
+    // else if (periph_present(oric, addr))
+    // {
+    //     periph_write(oric, addr, data);
+    //     return;
+    // }
 
   switch (oric->type)
   {
@@ -504,10 +529,10 @@ void telestratwrite( struct m6502 *cpu, unsigned short addr, unsigned char data 
 
   if( addr >= 0xc000 )
   {
-//    if( oric->romdis )
-//    {
-//      if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) ) return; // Can't write to ROM!
-//    } else {
+    if( oric->romdis )
+    {
+      if( ( oric->md.diskrom ) && ( addr >= 0xe000 ) ) return; // Can't write to ROM!
+    } else {
       switch( oric->tele_banktype )
       {
         case TELEBANK_HALFNHALF:
@@ -517,7 +542,7 @@ void telestratwrite( struct m6502 *cpu, unsigned short addr, unsigned char data 
           break;
       }
       return;
-//    }
+    }
   }
 
   if( ( addr & 0xff00 ) == 0x0300 )
@@ -2101,21 +2126,33 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
   setromon( oric );
   oric->tapename[0] = 0;
   tape_rewind( oric );
-  if (oric->twilighteboard_activated)
-  {
-    oric->twilighte=twilighte_oric_init();
-    oric->ch376_activated=SDL_TRUE;
+  // [Assinie--
+  // if (oric->twilighteboard_activated)
+  // {
+  //   oric->twilighte=twilighte_oric_init();
+  //   oric->ch376_activated=SDL_TRUE;
 
-    if (oric->twilighte->microdisc==SDL_TRUE)
-    {
-      oric->drivetype = DRV_MICRODISC;
-      oric->disksyms = NULL;
-      microdisc_init( &oric->md, &oric->wddisk, oric );
-    }
+  //   if (oric->twilighte->microdisc==SDL_TRUE)
+  //   {
+  //     oric->drivetype = DRV_MICRODISC;
+  //     oric->disksyms = NULL;
+  //     microdisc_init( &oric->md, &oric->wddisk, oric );
+  //   }
 
-  }
+  // }
 
-  if (oric->twilighte==NULL) oric->twilighteboard_activated=SDL_FALSE;
+  // if (oric->twilighte==NULL) oric->twilighteboard_activated=SDL_FALSE;
+  // --]
+
+  // [Assinie--
+  // Ici la config a été lue donc on sait si ch376 est activé ou non
+  periph_test(oric);
+  periph_list();
+  // -]
+  periph_reset_all(oric);
+  error_printf("Apres periph_reset, romdis=%d", oric->romdis);
+  // -]
+
 
   m6502_reset( &oric->cpu );
   via_init( &oric->via, oric, VIA_MAIN );
@@ -2145,14 +2182,6 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
 
   setmenutoggles( oric );
   refreshstatus = SDL_TRUE;
-
-  // [Assinie]
-  // Ici la config a été lue donc on sait si ch376 est activé ou non
-  periph_test(oric);
-  periph_list();
-  // -]
-  periph_reset_all(oric);
-  // -]
 
   return SDL_TRUE;
 }
@@ -2331,6 +2360,8 @@ SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           via_init( &oric->tele_via, oric, VIA_TELESTRAT );
           acia_init( &oric->tele_acia, oric );
 
+          // [Assinie--
+/*
           if (oric->twilighteboard_activated)
           {
             oric->ch376_activated=SDL_TRUE;
@@ -2343,12 +2374,14 @@ SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
             }
           }
 
-          if (oric->twilighte==NULL)
+           if (oric->twilighte==NULL)
           {
             oric->twilighteboard_activated=SDL_FALSE;
           }
           else
             oric->ch376_activated=SDL_TRUE;
+*/
+          // --]
 
     // [Assinie] - Tests
     // [--

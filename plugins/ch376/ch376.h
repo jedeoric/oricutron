@@ -13,7 +13,6 @@
 #define LOCAL_CH376_H
 
 /* #define DEBUG_CH376 */
-#define DEBUG_CH376
 
 /* /// "Portable types" */
 
