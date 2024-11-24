@@ -122,7 +122,7 @@ int plugin_instances = 0;
 // Description du plugin
 static char *description = "Twilighte board";
 
-#define CONFIG_FILE "plugins/twilighte_board/twilighte.cfg"
+#define CONFIG_FILE "plugins/twilighte.cfg"
 
 // -----------------------------------------------------------------------------
 //              Déclarations des fonctions utilitaires
