@@ -4430,7 +4430,6 @@ SDL_bool mon_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           // if( ( oric->twilighteboard_activated == SDL_FALSE ) && ( mshow == MSHOW_TWIL ) )
           //   mshow = (mshow+1)%MSHOW_LAST;
           // --]
-          fprintf(stderr, "mshow = %d, MSHOW_PERIPH=%d, MSHOW_LAST=%d\n", mshow, MSHOW_PERIPH, MSHOW_LAST);
           while ( (mshow >= MSHOW_PERIPH) && (!mon_periph_enabled_by_id(mshow - MSHOW_PERIPH)) )
             mshow = (mshow+1)%MSHOW_LAST;
           *needrender = SDL_TRUE;

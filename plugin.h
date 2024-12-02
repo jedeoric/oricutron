@@ -3,6 +3,13 @@
 #define PLG_DEVICE 1
 #define PLG_BANK 2
 #define PLG_MULTI 4
+struct expansion_bus {
+	struct m6502 *cpu;
+	SDL_bool *romdis;
+	Uint8 *irq;
+	Uint16 address;
+	SDL_bool io;
+};
 
 struct PLUGIN {
     char name[PERIPH_NAME_LEN+1];
@@ -13,7 +20,7 @@ struct PLUGIN {
     unsigned int (*create)(struct machine *oric);
     SDL_bool (*shutdown)(struct machine *oric, unsigned int instance);
 
-    SDL_bool (*reset)(struct machine *oric, unsigned int instance);
+    SDL_bool (*reset)(struct expansion_bus *oric, unsigned int instance);
     Uint8 (*read)(struct machine *oric, SDL_bool fbank, unsigned int instance, Uint16 addr, SDL_bool fexec);
     SDL_bool (*write)(struct machine *oric, SDL_bool fbank, unsigned int instance, Uint16 addr, Uint8 data);
 
@@ -30,3 +37,4 @@ struct PLUGINS {
     SDL_bool enable;
     struct PLUGIN *periph;
 };
+

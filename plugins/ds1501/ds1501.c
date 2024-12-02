@@ -27,7 +27,7 @@
 #include "../../machine.h"
 
 #include "plugin.h"
-#define DEBUG_PLUGIN
+// #define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -110,7 +110,7 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 #define DYDT_mask   0x40
 
 // Utilitaire
-#define bcd2bin(data)   ( (data) & 0x0f) + ( (data) >> 4)*10
+#define bcd2bin(data)   (( (data) & 0x0f) + ( (data) >> 4)*10)
 
 struct DS1501_REGISTERS
 {
@@ -151,7 +151,7 @@ struct DS1501
 struct DS1501 *userdata[INSTANCE_MAX];
 struct DS1501 *userdata_old[INSTANCE_MAX];
 
-int plugin_instances = 0;
+unsigned int plugin_instances = 0;
 
 static char *description = "DS1501";
 
@@ -176,6 +176,8 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     // -----------------------------------------------------------------------------
 unsigned int plugin_create(struct machine *oric)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
@@ -279,6 +281,8 @@ unsigned int plugin_create(struct machine *oric)
     // -----------------------------------------------------------------------------
 SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (plugin_instances >= INSTANCE_MAX)
         return SDL_FALSE;
 
@@ -291,8 +295,10 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
+SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     dbg_printf("stack_reset(%d)\n", instance);
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -310,6 +316,8 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     //
 Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
@@ -427,6 +435,7 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 
         // Reserved
         case 0x14 ... 0x1f:
+            return (Uint8) 0;
             break;
 
         default:
@@ -448,6 +457,8 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 
 SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
@@ -936,7 +947,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                 if (userdata[instance]->control_b & TPE_mask)
                 {
                     userdata[instance]->control_a &= ~PAB_mask;
-                    dbg_printf("DS1501: TPE -> -PWR\n", AMx);
+                    dbg_printf("DS1501: TPE -> -PWR\n");
                 }
             }
         }
@@ -1222,6 +1233,8 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
     // -------------------------------------------------------------------------
 void mon_plugin_store(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 

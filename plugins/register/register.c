@@ -65,7 +65,7 @@ struct REG {
 };
 
 struct REG register_data[INSTANCE_MAX];
-int register_instances = 0;
+unsigned int register_instances = 0;
 
 static char *description = "Hardware register";
 
@@ -88,7 +88,9 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     // -----------------------------------------------------------------------------
 unsigned int register_create(struct machine *oric)
 {
-    if (register_instances >= INSTANCE_MAX)
+    oric = oric; // gcc [-Wunused-parameter]
+
+   if (register_instances >= INSTANCE_MAX)
         return 0;
 
     return ++register_instances;
@@ -99,6 +101,8 @@ unsigned int register_create(struct machine *oric)
     // -----------------------------------------------------------------------------
 SDL_bool register_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    instance = instance; // gcc [-Wunused-parameter]
 
     return SDL_TRUE;
 }
@@ -106,8 +110,10 @@ SDL_bool register_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool register_reset(struct machine *oric, unsigned int instance )
+SDL_bool register_reset(struct expansion_bus *oric, unsigned int instance )
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > register_instances) )
         return SDL_FALSE;
 
@@ -126,7 +132,10 @@ SDL_bool register_reset(struct machine *oric, unsigned int instance )
     //
 Uint8 register_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
-    // On inccrémente après la lecture du MSB
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
+    // On incrémente après la lecture du MSB
     //
     // ATTENTION:
     //     - DEEK lit d'abord le MSB puis le LSB
@@ -166,6 +175,9 @@ Uint8 register_read(struct machine *oric, SDL_bool fBank, unsigned int instance,
     //
 SDL_bool register_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     // ATTENTION:
     //     - DOKE écrit d'abord le MSB puis le LSB
     //     - Oricutron lit d'abord le MSB puis le LSB pour un adressage indirect
@@ -228,7 +240,9 @@ void mon_register_update(struct textzone *tz, unsigned int instance, Uint16 base
     // -------------------------------------------------------------------------
 void mon_register_store(struct machine *oric, unsigned int instance)
 {
-     if ( (!instance) || (instance > register_instances) )
+    oric = oric; // gcc [-Wunused-parameter]
+
+    if ( (!instance) || (instance > register_instances) )
         return;
 
     instance--;

@@ -420,7 +420,10 @@ void joy_buildmask( struct machine *oric )
 SDL_bool joy_filter_event( SDL_Event *ev, struct machine *oric )
 {
   SDL_bool swallow_event;
-  SDL_bool mode = (oric->type==MACH_TELESTRAT || (oric->twilighteboard_activated && oric->type==MACH_ATMOS))? SDL_TRUE : SDL_FALSE;
+  // [Assinie] - Tests
+  // SDL_bool mode = (oric->type==MACH_TELESTRAT || (oric->twilighteboard_activated && oric->type==MACH_ATMOS))? SDL_TRUE : SDL_FALSE;
+  SDL_bool mode = (oric->type==MACH_TELESTRAT);
+  // --]
 
   swallow_event  = dojoyevent( ev, oric, mode ? oric->telejoymode_a : oric->joymode_a, joystate_a, oric->sdljoy_a );
   swallow_event |= dojoyevent( ev, oric, mode ? oric->telejoymode_b : oric->joymode_b, joystate_b, oric->sdljoy_b );
@@ -488,7 +491,10 @@ static void dojoysetup( struct machine *oric, Sint16 mode_a, Sint16 mode_b )
 
 void joy_setup( struct machine *oric )
 {
-  if( oric->type == MACH_TELESTRAT || ( oric->type == MACH_ATMOS && oric->twilighteboard_activated) )
+  // [Assinie] - Tests
+  // if( oric->type == MACH_TELESTRAT || ( oric->type == MACH_ATMOS && oric->twilighteboard_activated) )
+  if( oric->type == MACH_TELESTRAT )
+  // --]
     dojoysetup( oric, oric->telejoymode_a, oric->telejoymode_b );
   else
     dojoysetup( oric, oric->joymode_a, oric->joymode_b );

@@ -117,7 +117,7 @@ static Uint8 romoffset[] = {0, 8, 12, 16, 4, 20, 24, 28};
 static Uint8 ramoffset[] = {0, 4, 8, 12, 16, 20, 24, 28};
 
 // Nombre d'instances total
-int plugin_instances = 0;
+unsigned int plugin_instances = 0;
 
 // Description du plugin
 static char *description = "Twilighte board";
@@ -151,10 +151,10 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 }
 
 // -----------------------------------------------------------------------------
-//                              plugin_create
+//                              twilighte_create
 // -----------------------------------------------------------------------------
 // Called to check plugin addresses (if multiples addresses)
-SDL_bool plugin_addresses(unsigned int instance,  Uint16 offset)
+SDL_bool twilighte_addresses(unsigned int instance,  Uint16 offset)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -175,11 +175,13 @@ SDL_bool plugin_addresses(unsigned int instance,  Uint16 offset)
 }
 
 // -----------------------------------------------------------------------------
-//                              plugin_create
+//                              twilighte_create
 // -----------------------------------------------------------------------------
 // Called to create a new instance of the extension
-unsigned int plugin_create(struct machine *oric)
+unsigned int twilighte_create(struct machine *oric)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
@@ -189,22 +191,26 @@ unsigned int plugin_create(struct machine *oric)
 }
 
 // -----------------------------------------------------------------------------
-//                              plugin_shutdown
+//                              twilighte_shutdown
 // -----------------------------------------------------------------------------
 // Called on exit
-SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
+SDL_bool twilighte_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    instance = instance; // gcc [-Wunused-parameter]
 
     return SDL_TRUE;
 }
 
 // -----------------------------------------------------------------------------
-//                                  plugin_reset
+//                                  twilighte_reset
 // -----------------------------------------------------------------------------
 // Called by init_machine and [F4]
-SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
+SDL_bool twilighte_reset(struct expansion_bus *oric, unsigned int instance)
 {
     dbg_printf("TWILIGHTE_reset(%d)\n", instance);
+    error_printf(": oric->romdis = %02x\n", oric->romdis);
+    error_printf(": oric->cpu.a  = %02x\n", oric->cpu->a);
 
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -214,9 +220,9 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     userdata[instance].firmware_version = 2;
     userdata[instance].t_register = (userdata[instance].firmware_version & 0x03) | 0x80;
     userdata[instance].t_banking_register = 0;
-    userdata[instance].DDRA = 0b10100111;
+    userdata[instance].DDRA = 0xa7;         // 0b10100111;
     userdata[instance].IORAh = 0x07;
-    userdata[instance].DDRB = 0b11000000;
+    userdata[instance].DDRB = 0xc0;         // 0b11000000;
     userdata[instance].IORB = 0;
 
 
@@ -224,9 +230,9 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     config_load(&userdata[instance]);
 
     // Désactive la rom interne
-    oric->romdis = SDL_TRUE;
+    *oric->romdis = SDL_TRUE;
     // Défaut par setromon()
-    oric->romon = ! oric->romdis;
+    // oric->romon = ! oric->romdis;
 
     return SDL_TRUE;
 }
@@ -236,10 +242,13 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Read access
-Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
+Uint8 twilighte_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
 {
     Uint8 data = 0;
     unsigned int bank;
+
+    oric = oric; // gcc [-Wunused-parameter]
+    run = run; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
         return data;
@@ -303,7 +312,7 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
         if (bank == 0)
             data = rambank[0][offset];
 
-        else if (bank >= 32)
+        else if (bank > 32)
             data = rambank[bank-32][offset];
 
         else
@@ -318,19 +327,23 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Write access
-SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
+SDL_bool twilighte_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
 {
     unsigned int bank;
+
+    oric = oric; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
     instance--;
 
+#ifdef DEBUG_PLUGIN
     if (!fBank)
         dbg_printf("TWILIGHTE WRITE: port $%04x <- $%02x\n", offset, data);
     else
         dbg_printf("TWILIGHTE WRITE: bank $%04x <- $%02x\n", offset, data);
+#endif
 
     if (!fBank)
         // Écriture dans un registre
@@ -383,11 +396,13 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
         if ( bank == 0)
             rambank[0][offset] = data;
 
-        else if ( bank >= 32)
+        else if ( bank > 32)
             rambank[bank-32][offset] = data;
 
+#ifdef DEBUG_PLUGIN
         else
             dbg_printf("TWILIGHTE WRITE: ROM (hw=%d, sw=%d", cpld(&userdata[instance]), bank);
+#endif
     }
 
     return SDL_TRUE;
@@ -399,14 +414,16 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
 // Monitor page
 // Rows: 19 (1-19)
 // Columns: 28 (1-28)
-void mon_plugin_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
+void mon_twilighte_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
+    base_addr = base_addr; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 
     instance--;
 
-    int i, bank;
+    int bank;
     struct BOARD *twilighte = &userdata[instance];
 
     dbg_printf("TWILIGHTE: mon update (instance=%d)\n", instance);
@@ -451,8 +468,8 @@ void mon_plugin_update(struct textzone *ptz, unsigned int instance, Uint16 base_
 
     my_tzputc( ptz, 8 );
 
-    my_tzprintfpos( ptz, 2, 9 ,  "Twil register : $%02X", twilighte->t_register );
-    my_tzprintfpos( ptz, 2, 10,  "Bank register : $%02X", twilighte->t_banking_register );
+    my_tzprintfpos( ptz, 2, 9 , "Twil register : $%02X", twilighte->t_register );
+    my_tzprintfpos( ptz, 2, 10, "Bank register : $%02X", twilighte->t_banking_register );
 
     my_tzprintfpos( ptz, 2, 12, "IORB          : $%02X", twilighte->IORB );
     my_tzprintfpos( ptz, 2, 13, "IORAh         : $%02X", twilighte->IORAh );
@@ -520,8 +537,10 @@ void mon_plugin_update(struct textzone *ptz, unsigned int instance, Uint16 base_
 //                      Sauvegarde de l'état
 // -------------------------------------------------------------------------
 // Called by monitor
-void mon_plugin_store(struct machine *oric, unsigned int instance)
+void mon_twilighte_store(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 
@@ -631,7 +650,7 @@ SDL_bool config_load(struct BOARD *twilighte)
              // because we initialize board version to 1. If firmware_version is set, then we have a look to firmware_version.
              // If it's equal to 1, then do not overlap the value
             if (twilighte->firmware_version!=1) {
-                twilighte->t_register=twilighte->t_register&0b11111110; // Remove bit 0 (firmware 1 which is the default when the .cfg does not contain firmware version)
+                twilighte->t_register=twilighte->t_register & 0xfe; // Remove bit 0 (firmware 1 which is the default when the .cfg does not contain firmware version)
                 twilighte->t_register = twilighte->t_register | (twilighte->firmware_version);
             }
             continue;
@@ -744,14 +763,14 @@ static SDL_bool bank_load(char* fname, int size, Uint8 where[])
 struct PLUGIN plugin = { "Twilghte",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 PLG_DEVICE | PLG_MULTI | PLG_BANK,
-                plugin_addresses,
-                plugin_create,
-                plugin_shutdown,
-                plugin_reset,
-                plugin_read,
-                plugin_write,
+                twilighte_addresses,
+                twilighte_create,
+                twilighte_shutdown,
+                twilighte_reset,
+                twilighte_read,
+                twilighte_write,
                 NULL,
-                mon_plugin_update,
-                mon_plugin_store,
+                mon_twilighte_update,
+                mon_twilighte_store,
     };
 

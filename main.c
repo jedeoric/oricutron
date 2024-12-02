@@ -638,9 +638,11 @@ static void load_config( struct start_opts *sto, struct machine *oric )
     if( read_config_joykey( &sto->lctmp[i], "kbjoy2_fire2", &oric->kbjoy2[5] ) ) continue;
     if( read_config_joykey( &sto->lctmp[i], "kbjoy2_fire3", &oric->kbjoy2[6] ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "diskautosave", &oric->diskautosave ) ) continue;
-    if( read_config_bool(   &sto->lctmp[i], "ch376",        &oric->ch376_activated) ) continue;
-    if( read_config_bool(   &sto->lctmp[i], "twilighte_board",&oric->twilighteboard_activated) ) continue;
-    if( read_config_bool(   &sto->lctmp[i], "ds1501"      ,&oric->ds1501_activated) ) continue;
+    // {Assinie--
+    // if( read_config_bool(   &sto->lctmp[i], "ch376",        &oric->ch376_activated) ) continue;
+    // if( read_config_bool(   &sto->lctmp[i], "twilighte_board",&oric->twilighteboard_activated) ) continue;
+    // if( read_config_bool(   &sto->lctmp[i], "ds1501"      ,&oric->ds1501_activated) ) continue;
+    //--]
     if( read_config_bool(   &sto->lctmp[i], "pravdiskautoboot", &oric->pravdiskautoboot ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "disable_menuscheme", &oric->disable_menuscheme ) ) continue;
     if( read_config_bool(   &sto->lctmp[i], "show_keyboard", &oric->show_keyboard ) ) continue;
@@ -792,9 +794,11 @@ SDL_bool init( struct machine *oric, int argc, char *argv[] )
   sto->start_syms_count = 0;
   sto->start_snapshot[0] = 0;
   sto->start_breakpoint = NULL;
-  oric->ch376_activated = SDL_FALSE;
-  oric->twilighteboard_activated = SDL_FALSE;
-  oric->ds1501_activated = SDL_FALSE;
+  // [Assinie--
+  // oric->ch376_activated = SDL_FALSE;
+  // oric->twilighteboard_activated = SDL_FALSE;
+  // oric->ds1501_activated = SDL_FALSE;
+  // --]
 
   fullscreen          = SDL_FALSE;
 #ifdef WIN32
@@ -1586,8 +1590,10 @@ void frameloop_normal( struct machine *oric, SDL_bool *framedone, SDL_bool *need
         break;
       }
 
-      if (!oric->twilighteboard_activated)
-      tape_patches( oric );
+      // [Assinie--
+      // if (!oric->twilighteboard_activated)
+      //   tape_patches( oric );
+      //
 
       via_clock( &oric->via, oric->cpu.icycles );
       ay_ticktock( &oric->ay, oric->cpu.icycles );

@@ -64,7 +64,7 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 static struct ch376 * userdata[INSTANCE_MAX];
 static struct ch376 * userdata_old[INSTANCE_MAX];
 
-int plugin_instances = 0;
+unsigned int plugin_instances = 0;
 
 static char *description = "CH376";
 
@@ -94,6 +94,8 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     // -----------------------------------------------------------------------------
 unsigned int plugin_create(struct machine *oric)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
@@ -111,6 +113,8 @@ unsigned int plugin_create(struct machine *oric)
     // -----------------------------------------------------------------------------
 SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
@@ -126,8 +130,10 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
+SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     dbg_printf("CH376 reset(%d)\n", instance);
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -147,6 +153,9 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
     //
 Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
@@ -179,6 +188,9 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
     //
 SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
@@ -213,7 +225,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
 
     instance--;
 
-    int i;
+    // int i;
 
     dbg_printf("CH376: mon update\n");
 
@@ -296,6 +308,8 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
     // -------------------------------------------------------------------------
 void mon_plugin_store(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 

@@ -1,0 +1,16 @@
+TOPTARGETS := all clean
+
+# SUBDIRS := $(wildcard */.)
+# SUBDIRS := twilighte
+SUBDIRS := ch376 debug ds1501 register skel stack twilighte
+
+$(TOPTARGETS): $(SUBDIRS)
+
+all: $(SUBDIRS)
+$(SUBDIRS): force_look
+	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+force_look:
+	true
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS)

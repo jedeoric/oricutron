@@ -1363,13 +1363,14 @@ void insertdisk( struct machine *oric, struct osdmenuitem *mitem, int drive )
   joinpath( dpath, dfile );
   diskimage_load( oric, filetmp, drive );
 
-  if( oric->drivetype == DRV_NONE )
-  {
-    if (!oric->twilighteboard_activated)
-      swapmach( oric, NULL, (DRV_MICRODISC<<16)|oric->type );
-//    setemumode( oric, NULL, EM_DEBUG );
-    return;
-  }
+  // [Assinie-- A VERIFIER
+  // if( oric->drivetype == DRV_NONE )
+  // {
+  //   if (!oric->twilighteboard_activated)
+  //     swapmach( oric, NULL, (DRV_MICRODISC<<16)|oric->type );
+////     setemumode( oric, NULL, EM_DEBUG );
+  //   return;
+  // }
   setemumode( oric, NULL, EM_RUNNING );
 }
 
@@ -2436,8 +2437,8 @@ void setmenutoggles( struct machine *oric )
 
   g_menu_scheme = oric->disable_menuscheme? 5 : oric->type;
 
-  find_item_by_function(hwopitems, togglech376)->name = oric->ch376_activated ? "\x0e""CH376 (Telestrat)" : " CH376 (Telestrat)    ";
   // [Assinie] - Tests
+  // find_item_by_function(hwopitems, togglech376)->name = oric->ch376_activated ? "\x0e""CH376 (Telestrat)" : " CH376 (Telestrat)    ";
   // find_item_by_function(hwopitems, toggletwilighte)->name = oric->twilighteboard_activated ? "\x0e""Twilighte board" : " Twilighte board";
   // --]
 }

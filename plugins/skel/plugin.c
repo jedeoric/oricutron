@@ -89,7 +89,7 @@ struct DATA userdata[INSTANCE_MAX];
 struct DATA userdata_old[INSTANCE_MAX];
 
 // Nombre d'instances total
-int plugin_instances = 0;
+unsigned int plugin_instances = 0;
 
 // Description du plugin
 static char *description = "Plugin example";
@@ -140,6 +140,8 @@ SDL_bool plugin_addresses(unsigned int instance,  Uint16 offset)
 // Called to create a new instance of the extension
 unsigned int plugin_create(struct machine *oric)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
@@ -154,6 +156,8 @@ unsigned int plugin_create(struct machine *oric)
 // Called on exit
 SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    instance = instance; // gcc [-Wunused-parameter]
 
     return SDL_TRUE;
 }
@@ -162,8 +166,10 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 //                                  plugin_reset
 // -----------------------------------------------------------------------------
 // Called by init_machine and [F4]
-SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
+SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     dbg_printf("plugin_reset(%d)\n", instance);
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -186,6 +192,9 @@ SDL_bool plugin_reset(struct machine *oric, unsigned int instance)
 // Read access
 Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
@@ -232,6 +241,9 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 // Write access
 SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
@@ -272,6 +284,8 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
 // Called before the execution of a 6502 instruction
 void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 
@@ -347,6 +361,8 @@ void mon_plugin_update(struct textzone *ptz, unsigned int instance, Uint16 base_
 // Called by monitor
 void mon_plugin_store(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > plugin_instances) )
         return;
 

@@ -66,7 +66,7 @@ struct STACK {
 };
 
 struct STACK userdata[INSTANCE_MAX];
-int stack_instances = 0;
+unsigned int stack_instances = 0;
 
 static char *description = "Hardware stack";
 
@@ -89,6 +89,8 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     // -----------------------------------------------------------------------------
 unsigned int stack_create(struct machine *oric)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if (stack_instances >= INSTANCE_MAX)
         return 0;
 
@@ -100,6 +102,8 @@ unsigned int stack_create(struct machine *oric)
     // -----------------------------------------------------------------------------
 SDL_bool stack_shutdown(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    instance = instance; // gcc [-Wunused-parameter]
 
     return SDL_TRUE;
 }
@@ -107,8 +111,10 @@ SDL_bool stack_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool stack_reset(struct machine *oric, unsigned int instance)
+SDL_bool stack_reset(struct expansion_bus *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     dbg_printf("stack_reset(%d)\n", instance);
 
     if ( (!instance) || (instance > stack_instances) )
@@ -131,6 +137,9 @@ SDL_bool stack_reset(struct machine *oric, unsigned int instance)
     //
 Uint8 stack_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > stack_instances) )
         return (Uint8) 0;
 
@@ -163,6 +172,9 @@ Uint8 stack_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Ui
     //
 SDL_bool stack_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+    fBank = fBank; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > stack_instances) )
         return SDL_FALSE;
 
@@ -246,6 +258,8 @@ void mon_stack_update(struct textzone *tz, unsigned int instance, Uint16 base_ad
     // -------------------------------------------------------------------------
 void mon_stack_store(struct machine *oric, unsigned int instance)
 {
+    oric = oric; // gcc [-Wunused-parameter]
+
     if ( (!instance) || (instance > stack_instances) )
         return;
 
