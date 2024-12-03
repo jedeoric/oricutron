@@ -1,4 +1,4 @@
-#define ch395_ORIC_EXTENSION_DATA_PORT 0x380
+#define ch395_ORIC_EXTENSION_DATA_PORT    0x380
 #define ch395_ORIC_EXTENSION_COMMAND_PORT 0x381
 
 #define CH395_CMD_GET_IC_VER              0x01
@@ -223,4 +223,4 @@ struct ch395
 
     };
 
-struct ch395 * ch395_create(void *user_data);
+//struct ch395 * ch395_create(void *user_data);

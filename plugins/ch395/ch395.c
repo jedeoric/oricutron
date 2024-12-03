@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 
 
+
 #include "../../system.h"
 #include "../../6502.h"
 #include "../../via.h"
@@ -16,6 +17,26 @@
 
 #include "plugin.h"
 #include "../../machine.h"
+
+#define INSTANCE_MAX 2
+
+struct ch395 *userdata[INSTANCE_MAX];
+struct ch395 *userdata_old[INSTANCE_MAX];
+
+// -----------------------------------------------------------------------------
+//
+// -----------------------------------------------------------------------------
+// extern struct textzone *tz[];
+// extern struct osdmenu menus[];
+// Si Oricutron est compilé sans l'option -rdynamic alors il faut passer la
+// référence des fonctions tzprintfpos et tzpoutc au plugin.
+#ifndef RDYNAMIC
+void (*my_tzprintfpos)( struct textzone *ptz, int x, int y, char *fmt, ... );
+void (*my_tzputc)( struct textzone *ptz, char c );
+void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
+#endif
+
+
 
 // Pour les fonction de lecture du fichier de configuration
 #include "../../main.h"
@@ -65,23 +86,14 @@ extern struct Library *SysBase;
 #error "FixMe!"
 #endif
 
-#define DEBUG_CH395 0
 
-#ifdef DEBUG_CH395
+
+#ifdef DEBUG_PLUGIN
 #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
 #else
 #define dbg_printf(...)
 #endif
 
-
-// #define DEBUG_PLUGIN
-#ifdef DEBUG_PLUGIN
-    // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
-    // #define dbg_printf(x...) { printf(x); }
-    #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
-#else
-    #define dbg_printf(...)
-#endif
 
 
 
@@ -97,38 +109,6 @@ static void * system_alloc_mem(int size)
 
 #define BASE_ADDR 0x0360
 #define END_ADDR 0x0361
-
-// On ne peut instancier qu'un seul périphérique
-#define INSTANCE_MAX 1
-
-// Taille de la pile
-#define DATA_SIZE 16
-
-// Structure de données pour une instance du périphérique
-struct BOARD {
-    int firmware_version;
-    // SDL_bool microdisc;                         // Inutilisé pour le moment
-
-    // unsigned int bank;
-
-    // // 0x0320 - 0x0323
-    // unsigned char DDRA;
-    // unsigned char IORAh;
-
-    // unsigned char DDRB;
-    // unsigned char IORB;
-
-    // // 0x0342 - 0x0343
-    // unsigned char t_register;                   // ?xRx xVVV
-    // unsigned char t_banking_register;
-};
-
-// Tableau: instances
-struct BOARD userdata[INSTANCE_MAX];
-
-// Copie de userdata[] pour comparaison entre deux appels au moniteur
-// (pour pouvoir afficher les différences)
-struct BOARD userdata_old[INSTANCE_MAX];
 
 
 // Nombre d'instances total
@@ -147,8 +127,8 @@ void ch395_set_des_port_sn()
 {
 
 }
-
-void perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
+*/
+int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 {
 
     int sockfd;
@@ -173,7 +153,7 @@ void perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
         perror("Erreur lors de la connexion au serveur");
         return 1;
     }
-
+    return 0;
 }
 
 
@@ -221,23 +201,42 @@ void ch395_init_internal(struct ch395 *ch395)
 
 }
 
-struct ch395 * ch395_create(void *user_data)
+//struct ch395 * ch395_create()
+int ch395_create(struct machine *oric)
 {
-    unsigned char i;
-    struct ch395 *ch395 = (struct ch395 *)malloc(sizeof(struct ch395));
-    if(ch395)
+    oric = oric; // gcc [-Wunused-parameter]
+
+    if (plugin_instances >= INSTANCE_MAX)
+        return 0;
+
+    userdata[plugin_instances] = malloc(sizeof(struct ch395));
+    userdata_old[plugin_instances] = malloc(sizeof(struct ch395));
+
+    if (userdata[plugin_instances])
     {
-        ch395->is_init = CH395_FALSE;
-        ch395->nb_bytes_in_cmd_data = 15; // ???
-        ch395_init_internal(ch395);
-    }
-    else
-    {
-        free(ch395);
-        ch395 = NULL;
+        if (userdata_old[plugin_instances] == NULL)
+        {
+            free(userdata[plugin_instances]);
+            return 0;
+        }
+        return ++plugin_instances;
     }
 
-    return ch395;
+    return 0;
+    // struct ch395 *ch395 = (struct ch395 *)malloc(sizeof(struct ch395));
+    // if(ch395)
+    // {
+    //     ch395->is_init = CH395_FALSE;
+    //     ch395->nb_bytes_in_cmd_data = 15; // ???
+    //     ch395_init_internal(ch395);
+    // }
+    // else
+    // {
+    //     free(ch395);
+    //     ch395 = NULL;
+    // }
+
+    // return ch395;
 }
 
 
@@ -275,8 +274,9 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
     char *value;
     msg = malloc(200);
     value = malloc(200);
+
     // uint8_t data_out = 0xff; // Hi-Z
-    // #printf(">>[CH395][READ][DATA]\n");
+    //printf(">>[CH395][READ][DATA] %d\n", ch395->command);
 
     // dbg_printf(">> [READ][DATA] for during command &%02x status &%02x\n", ch395->command, ch395->command_status);
 
@@ -284,8 +284,9 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
     {
         case CH395_CMD_CHECK_EXIST:
             data = ch395->cmd_data.CMD_CheckByte;
-            dbg_printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to &%02x\n", data);
-            break;
+            dbg_printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x\n", ch395->cmd_data.CMD_CheckByte);
+            printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x\n", ch395->cmd_data.CMD_CheckByte);
+            return data;
 
          case CH395_CMD_GET_IC_VER:
             printf("<<[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
@@ -405,6 +406,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
 
             ch395->pos_rw_in_cmd_data ++;
             break;
+
+
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
             printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS] value : %d \n",ch395->glob_int_status);
@@ -674,6 +677,10 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
         case CH395_CMD_SET_RECV_BUF:
         case CH395_CMD_SET_SEND_BUF:
         case CH395_CMD_SET_FUN_PARA:
+            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]");
+            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]");
+            ch395->command = CH395_CMD_SET_FUN_PARA;
+            break;
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
         case CH395_CMD_SET_KEEP_LIVE_CNT:
@@ -690,7 +697,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
     }
 }
 
-void ch395_write_data_port(struct ch395 *ch395, uint8_t data)
+int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 {
 
     switch(ch395->command)
@@ -701,9 +708,9 @@ void ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_CHECK_EXIST:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] waiting for check byte\n");
-            ch395->cmd_data.CMD_CheckByte ^= data;
+            ch395->cmd_data.CMD_CheckByte = ~data;
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x \n",data, ch395->cmd_data.CMD_CheckByte);
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x \n",data, ch395->cmd_data.CMD_CheckByte);
             break;
 
         case CH395_CMD_SET_BAUDRATE:
@@ -1082,7 +1089,7 @@ void ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             // Launch socket (for instance stub)
             ch395->buffer[ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketWriteBuffer[0]]*CH395_SIZE_BLOCK_BUFFER + ch395->nb_bytes_in_cmd_data - 3]  = data;
 
-            if (data == '13')
+            if (data == 13)
                 {
                 printf("value : %d/char 13\n", data);
                 dbg_printf("value : %d/char 13\n", data);
@@ -1198,6 +1205,10 @@ void ch395_write_data_port(struct ch395 *ch395, uint8_t data)
         case CH395_CMD_SET_RECV_BUF:
         case CH395_CMD_SET_SEND_BUF:
         case CH395_CMD_SET_FUN_PARA:
+
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA]\n");
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA]\n");
+            break;
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
         case CH395_CMD_SET_KEEP_LIVE_CNT:
@@ -1224,8 +1235,39 @@ void ch395_write_data_port(struct ch395 *ch395, uint8_t data)
     //     ch395->cmd_data.CMD_CheckByte = ~command;
     //     dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] got check byte &%02x from command port!\n", command);
     // }
+    return 0;
 }
-*/
+
+
+Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+{
+    fBank = fBank; // gcc [-Wunused-parameter]
+
+    if ( (!instance) || (instance > plugin_instances) )
+        return (Uint8) 0;
+
+    instance--;
+
+    if (addr == 0x00) ch395_read_data_port(userdata[instance]);
+    if (addr == 0x01) ch395_read_command_port(userdata[instance]);
+
+}
+
+SDL_bool ch395_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+{
+    fBank = fBank; // gcc [-Wunused-parameter]
+
+    if ( (!instance) || (instance > plugin_instances) )
+        return SDL_FALSE;
+
+    instance--;
+
+    if (addr == 0x00) ch395_write_data_port(userdata[instance], data);
+    if (addr == 0x01) ch395_write_command_port(userdata[instance], data);
+
+}
+
+
 // -----------------------------------------------------------------------------
 //                              ch395_addresses
 // -----------------------------------------------------------------------------
@@ -1250,20 +1292,30 @@ SDL_bool ch395_addresses(unsigned int instance,  Uint16 offset)
     return SDL_FALSE;
 }
 
-// -----------------------------------------------------------------------------
-//                              ch395_create
-// -----------------------------------------------------------------------------
-// Called to create a new instance of the extension
-unsigned int ch395_create(struct machine *oric)
+
+unsigned int plugin_create(struct machine *oric)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
-//    oric->romdis = SDL_FALSE;
+    userdata[plugin_instances] = malloc(sizeof(struct ch395));
+    userdata_old[plugin_instances] = malloc(sizeof(struct ch395));
 
-    return ++plugin_instances;
+    if (userdata[plugin_instances])
+    {
+        if (userdata_old[plugin_instances] == NULL)
+        {
+            free(userdata[plugin_instances]);
+            return 0;
+        }
+
+
+      return ++plugin_instances;
+    }
+
+    return 0;
 }
 
 // -----------------------------------------------------------------------------
@@ -1480,7 +1532,7 @@ void mon_ch395_store(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "ch395",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
-                PLG_DEVICE | PLG_MULTI | PLG_BANK,
+                PLG_DEVICE,
                 ch395_addresses,
                 ch395_create,
                 ch395_shutdown,
