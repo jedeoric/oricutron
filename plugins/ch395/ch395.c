@@ -118,9 +118,9 @@ unsigned int plugin_instances = 0;
 static char *description = "CH395";
 
 
-void ch395_init()
+void ch395_init(struct ch395 *ch395)
 {
-
+    //is_init
 }
 /*
 void ch395_set_des_port_sn()
@@ -219,6 +219,17 @@ int ch395_create(struct machine *oric)
             free(userdata[plugin_instances]);
             return 0;
         }
+        // ch395 is not initialized
+        userdata[plugin_instances]->is_init = CH395_FALSE;
+        userdata[plugin_instances]->phy_state = CH395_PHY_DISCONN;
+        // Mac address can be accessed even if ch395 is not init
+        userdata[plugin_instances]->mac_address[5] = 0xaa;
+        userdata[plugin_instances]->mac_address[4] = 0xbb;
+        userdata[plugin_instances]->mac_address[3] = 0xcc;
+        userdata[plugin_instances]->mac_address[2] = 0xdd;
+        userdata[plugin_instances]->mac_address[1] = 0xee;
+        userdata[plugin_instances]->mac_address[0] = 0xff;
+
         return ++plugin_instances;
     }
 
@@ -289,9 +300,19 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             return data;
 
          case CH395_CMD_GET_IC_VER:
-            printf("<<[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
-            dbg_printf("<<[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
+            printf("<<[CH395][READ][DATA][CH395_CMD_GET_IC_VER]\n");
+            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_IC_VER]\n");
             data = 70; //VERSION
+            break;
+
+        case CH395_CMD_GET_PHY_STATUS:
+            printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]\n");
+            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]\n");
+            // If ch395 is not init, PHY_state is always disconnected
+            if (ch395->is_init == CH395_FALSE)
+                data = CH395_PHY_DISCONN;
+            else
+                data = ch395->phy_state;
             break;
 
         case CH395_CMD_READ_RECV_BUF_SN:
@@ -317,6 +338,17 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
 
             ch395->pos_rw_in_cmd_data ++;
             printf("\n");
+            break;
+
+        case CH395_CMD_GET_MAC_ADDR:
+            if (ch395->nb_bytes_in_cmd_data == 6) {
+                print("CH395 panic : impossible to read mac adress more than 6 bytes");
+                data = 0;
+            }
+            else {
+                data = ch395->mac_address[ch395->nb_bytes_in_cmd_data];
+                ch395->nb_bytes_in_cmd_data++;
+            }
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
@@ -516,6 +548,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
         case CH395_CMD_GET_PHY_STATUS:
             printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
             dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
+
             ch395->command = CH395_CMD_GET_PHY_STATUS;
             break;
 
@@ -648,6 +681,9 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_GET_MAC_ADDR:
+            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_MAC_ADDR]\n");
+            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_MAC_ADDR]\n");
+            ch395->command = CH395_CMD_GET_MAC_ADDR;
             break;
 
         case CH395_CMD_DHCP_ENABLE:
@@ -669,16 +705,25 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_PPPOE_SET_USER_NAME:
+            break;
+
         case CH395_CMD_PPPOE_SET_PASSWORD:
+            break;
         case CH395_CMD_PPPOE_ENABLE:
+            break;
         case CH395_CMD_GET_PPPOE_STATUS:
+            break;
         case CH395_CMD_SET_TCP_MSS:
+            break;
         case CH395_CMD_SET_TTL:
+            break;
         case CH395_CMD_SET_RECV_BUF:
+            break;
         case CH395_CMD_SET_SEND_BUF:
+            break;
         case CH395_CMD_SET_FUN_PARA:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]");
+            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]\n");
+            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]\n");
             ch395->command = CH395_CMD_SET_FUN_PARA;
             break;
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
@@ -1292,7 +1337,7 @@ SDL_bool ch395_addresses(unsigned int instance,  Uint16 offset)
     return SDL_FALSE;
 }
 
-
+/*
 unsigned int plugin_create(struct machine *oric)
 {
     oric = oric; // gcc [-Wunused-parameter]
@@ -1317,7 +1362,7 @@ unsigned int plugin_create(struct machine *oric)
 
     return 0;
 }
-
+*/
 // -----------------------------------------------------------------------------
 //                              ch395_shutdown
 // -----------------------------------------------------------------------------
