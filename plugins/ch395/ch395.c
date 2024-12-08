@@ -3,6 +3,11 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+
 
 
 
@@ -17,6 +22,8 @@
 
 #include "plugin.h"
 #include "../../machine.h"
+
+#define ROUTE_PATH "/proc/net/route"
 
 #define INSTANCE_MAX 2
 
@@ -117,7 +124,164 @@ unsigned int plugin_instances = 0;
 // Description du plugin
 static char *description = "CH395";
 
+void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
 
+#define ROUTE_PATH "/proc/net/route"
+#define RESOLV_PATH "/etc/resolv.conf"
+
+    FILE *route_file, *resolv_file;
+    char iface[IF_NAMESIZE];
+    char line[256];
+    struct ifaddrs *ifaddr, *ifa;
+    char ip_address[INET_ADDRSTRLEN];
+    char gateway_address[INET_ADDRSTRLEN];
+    unsigned long gateway;
+    char subnet_mask[INET_ADDRSTRLEN];
+
+    unsigned char ip_first_octet = 0, dns1_first_octet = 0, dns2_first_octet = 0;
+
+    // Ouvrir le fichier de routage
+    route_file = fopen(ROUTE_PATH, "r");
+    if (!route_file) {
+        perror("Erreur lors de l'ouverture de /proc/net/route");
+        return EXIT_FAILURE;
+    }
+
+    // Lire chaque ligne de la table de routage
+    while (fgets(line, sizeof(line), route_file)) {
+        unsigned long dest, flags;
+
+        if (sscanf(line, "%s %lx %lx %lx", iface, &dest, &gateway, &flags) == 4) {
+            if (dest == 0) { // La destination 0.0.0.0 correspond à la passerelle par défaut
+                printf("Interface avec passerelle par défaut : %s\n", iface);
+
+                // Convertir l'adresse de la passerelle en format lisible
+                struct in_addr gw_addr;
+                gw_addr.s_addr = gateway;
+
+                unsigned char *ip_by_bytes = (unsigned char *)&gateway;
+
+                ch395->ip_chip[11] = ip_by_bytes[0];
+                ch395->ip_chip[10] = ip_by_bytes[1];
+                ch395->ip_chip[9] = ip_by_bytes[2];
+                ch395->ip_chip[8] = ip_by_bytes[3];
+
+                inet_ntop(AF_INET, &gw_addr, gateway_address, INET_ADDRSTRLEN);
+                printf("Passerelle : %s\n", gateway_address);
+
+                // Récupérer les adresses associées à cette interface
+                if (getifaddrs(&ifaddr) == -1) {
+                    perror("getifaddrs");
+                    fclose(route_file);
+                    return EXIT_FAILURE;
+                }
+
+                for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+                    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
+                        continue;
+                    }
+
+                    if (strcmp(ifa->ifa_name, iface) == 0) {
+                        // Obtenir l'adresse IP en format lisible
+
+
+                        struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
+
+
+
+                        // Convertir le masque en format lisible
+                        inet_ntop(AF_INET, &netmask->sin_addr, subnet_mask, INET_ADDRSTRLEN);
+                        printf("Masque de sous-réseau pour %s : %s\n", iface, subnet_mask);
+
+                        unsigned char *ip_by_bytes = (unsigned char *)&netmask->sin_addr.s_addr;
+
+                        ch395->ip_chip[7] = ip_by_bytes[0];
+                        ch395->ip_chip[6] = ip_by_bytes[1];
+                        ch395->ip_chip[5] = ip_by_bytes[2];
+                        ch395->ip_chip[4] = ip_by_bytes[3];
+
+                        struct sockaddr_in *addr_ip = (struct sockaddr_in *)ifa->ifa_addr;
+
+                        if (inet_ntop(AF_INET, &addr_ip->sin_addr, ip_address, INET_ADDRSTRLEN) != NULL) {
+                            printf("Adresse IP de l'interface %s : %s\n", iface, ip_address);
+                            unsigned char *ip_by_bytes = (unsigned char *)&addr_ip->sin_addr.s_addr;
+
+                            ch395->ip_chip[3] = ip_by_bytes[0];
+                            ch395->ip_chip[2] = ip_by_bytes[1];
+                            ch395->ip_chip[1] = ip_by_bytes[2];
+                            ch395->ip_chip[0] = ip_by_bytes[3];
+
+                        }
+                        break;
+                    }
+                }
+
+                freeifaddrs(ifaddr);
+                fclose(route_file);
+
+                // Lecture des serveurs DNS depuis /etc/resolv.conf
+                resolv_file = fopen(RESOLV_PATH, "r");
+                if (!resolv_file) {
+                    perror("Erreur lors de l'ouverture de /etc/resolv.conf");
+                    return EXIT_FAILURE;
+                }
+
+                printf("Serveurs DNS :\n");
+                int dns_count = 0;
+                while (fgets(line, sizeof(line), resolv_file)) {
+                    if (strncmp(line, "nameserver", 10) == 0) {
+                        char dns[INET_ADDRSTRLEN];
+                        if (sscanf(line, "nameserver %s", dns) == 1) {
+                            printf("- %s\n", dns);
+
+                            // Extraire le 1er octet du serveur DNS
+                            struct in_addr dns_addr;
+                            inet_pton(AF_INET, dns, &dns_addr);
+                            if (dns_count == 0) {
+                                dns1_first_octet = ((unsigned char *)&dns_addr.s_addr)[0];
+                                unsigned char *ip_by_bytes = (unsigned char *)&dns_addr.s_addr;
+
+                                ch395->ip_chip[15] = ip_by_bytes[0];
+                                ch395->ip_chip[14] = ip_by_bytes[1];
+                                ch395->ip_chip[13] = ip_by_bytes[2];
+                                ch395->ip_chip[12] = ip_by_bytes[3];
+
+                            } else if (dns_count == 1) {
+                                dns2_first_octet = ((unsigned char *)&dns_addr.s_addr)[0];
+
+                                unsigned char *ip_by_bytes = (unsigned char *)&dns_addr.s_addr;
+
+                                ch395->ip_chip[20] = ip_by_bytes[0];
+                                ch395->ip_chip[18] = ip_by_bytes[1];
+                                ch395->ip_chip[17] = ip_by_bytes[2];
+                                ch395->ip_chip[19] = ip_by_bytes[3];
+                            }
+                            dns_count++;
+                        }
+                    }
+                }
+
+                fclose(resolv_file);
+
+                // Afficher les 1ers octets
+                printf("1er octet de l'adresse IP de l'interface : %u\n", ip_first_octet);
+                if (dns1_first_octet != 0) {
+                    printf("1er octet du 1er serveur DNS : %u\n", dns1_first_octet);
+                }
+                if (dns2_first_octet != 0) {
+                    printf("1er octet du 2ème serveur DNS : %u\n", dns2_first_octet);
+                }
+
+
+                return EXIT_SUCCESS;
+            } 
+        }
+    }
+
+    fclose(route_file);
+    printf("Aucune passerelle par défaut trouvée.\n");
+    return EXIT_FAILURE;
+}
 void ch395_init(struct ch395 *ch395)
 {
     //is_init
@@ -204,6 +368,7 @@ void ch395_init_internal(struct ch395 *ch395)
 //struct ch395 * ch395_create()
 int ch395_create(struct machine *oric)
 {
+    int i;
     oric = oric; // gcc [-Wunused-parameter]
 
     if (plugin_instances >= INSTANCE_MAX)
@@ -229,6 +394,12 @@ int ch395_create(struct machine *oric)
         userdata[plugin_instances]->mac_address[2] = 0xdd;
         userdata[plugin_instances]->mac_address[1] = 0xee;
         userdata[plugin_instances]->mac_address[0] = 0xff;
+
+        for (i = 0; i< 20 ; i++) {
+            userdata[plugin_instances]->ip_chip[i] = 0;
+        }
+        ch395_init_internal(userdata[plugin_instances]);
+
 
         return ++plugin_instances;
     }
@@ -274,7 +445,7 @@ int ch395_create(struct machine *oric)
 
 unsigned char ch395_read_command_port(struct ch395 *ch395)
 {
-    printf(">>[CH395][READ][COMMAND]\n");
+    printf(">>[CH395][READ][COMMAND] read here\n");
     return 0;
 }
 
@@ -306,13 +477,37 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]\n");
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]\n");
+            printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
+            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
             // If ch395 is not init, PHY_state is always disconnected
-            if (ch395->is_init == CH395_FALSE)
+            if (ch395->is_init == CH395_FALSE) {
+                printf("ch395 not init Cable disconnected\n");
+                dbg_printf("ch395 not init Cable disconnected\n");
                 data = CH395_PHY_DISCONN;
-            else
+            }
+            else {
+                ch395->phy_state = CH395_PHY_100M_FLL;
+                printf("Return val %x Cable connected\n", ch395->phy_state);
+                dbg_printf("Return val %d Cable connected\n", ch395->phy_state);
                 data = ch395->phy_state;
+                // The next call, we set CH395_PHY_100M_FLL. FIXME : in order to be correct, it should test network host stack
+                // Depending of the network when the oric is connected, this value should not be this, but we set this now
+
+            }
+            break;
+
+        case CH395_CMD_GET_IP_INF:
+            printf(">>[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
+            dbg_printf("[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
+            if (ch395->pos_rw_in_cmd_data  == 20) {
+                printf("CH395 PANIC impossible to read more than 4 bytes \n");
+                dbg_printf("CH395 PANIC impossible to read more than 4 bytes \n");
+            }
+            else {
+                data = ch395->ip_chip[ch395->pos_rw_in_cmd_data];
+                ch395->pos_rw_in_cmd_data ++;
+                printf(" send : %d\n",data);
+            }
             break;
 
         case CH395_CMD_READ_RECV_BUF_SN:
@@ -342,7 +537,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
 
         case CH395_CMD_GET_MAC_ADDR:
             if (ch395->nb_bytes_in_cmd_data == 6) {
-                print("CH395 panic : impossible to read mac adress more than 6 bytes");
+                printf("CH395 panic : impossible to read mac adress more than 6 bytes");
                 data = 0;
             }
             else {
@@ -556,6 +751,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             printf(">>[CH395][WRITE][COMMAND][CH395_CMD_INIT]\n");
             dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_INIT]\n");
             ch395->command = CH395_CMD_INIT;
+            ch395->is_init = CH395_TRUE;
             break;
 
         case CH395_CMD_GET_UNREACH_IPPORT:
@@ -690,6 +886,11 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             printf(">>[CH395][WRITE][COMMAND][CH395_CMD_DHCP_ENABLE]\n");
             dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_DHCP_ENABLE]\n");
             ch395->command = CH395_CMD_DHCP_ENABLE;
+
+            ch395_fill_get_ip_inf_linux(ch395);
+
+
+            // Let's get IP and so on
             break;
 
         case CH395_CMD_GET_DHCP_STATUS:
@@ -793,8 +994,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS]\n");
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
             break;
 
         case CH395_CMD_INIT:
@@ -1237,8 +1438,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_IP_INF:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF]\n");
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF] CH395 PANIC impossible to write into DATA port with CH395_CMD_GET_IP_INF\n");
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF] CH395 PANIC impossible to write into DATA port with CH395_CMD_GET_IP_INFn");
             break;
 
         case CH395_CMD_PPPOE_SET_USER_NAME:
@@ -1471,8 +1672,9 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
     //123456789.123456789.12345678
 /*
     bank = logical_bank(twilighte);
-
-    my_tzprintfpos( ptz, 2, 2,  "Board version :  %02d", twilighte->t_register & 0x07 );
+*/
+    my_tzprintfpos( ptz, 2, 2,  "Initialized :  %02d", userdata[instance]->is_init);
+ /*
     my_tzprintfpos( ptz, 2, 4,  "Bank set      : $%02X", twilighte->t_banking_register );
     my_tzprintfpos( ptz, 2, 5,  "Bank hardware :  %02d", cpld(twilighte) );
     my_tzprintfpos( ptz, 2, 6,  "Bank software :  %02d", (bank > 32 ? bank - 32 : bank) );
@@ -1578,7 +1780,7 @@ void mon_ch395_store(struct machine *oric, unsigned int instance)
 struct PLUGIN plugin = { "ch395",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 PLG_DEVICE,
-                ch395_addresses,
+                NULL,
                 ch395_create,
                 ch395_shutdown,
                 ch395_reset,

@@ -198,6 +198,7 @@ struct ch395
     CH395_U16 pos_rw_in_cmd_data;
     CH395_U8 buffer[24576];
     CH395_U8 mac_address[6];
+    CH395_U8 ip_chip[20];
     CH395_U8 socket_state[8]; // Socket state
     CH395_U8 socket_proto[8]; // Socket proto
     CH395_U8 socket_dest_port[8][2];
@@ -212,7 +213,7 @@ struct ch395
     CH395_U8 buffer_position_transmit[8]; // Position receveive buffer for each socket
     CH395_U16 buffer_position_write_from_data[8]; // ptr  send data into buffer from cpu
     CH395_U16 buffer_position_read_from_data[8]; // ptr  receive data into buffer from cpu
-    CH395_BOOL phy_state;
+    CH395_U8 phy_state;
 
     CH395_U8 receive_buffer_start_block[8];
     CH395_U8 receive_buffer_number_of_block[8];
