@@ -27,6 +27,7 @@
 
 #include "plugin.h"
 
+// #define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -55,6 +56,9 @@ void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 // 0000: pile
 // 0001: pointeur de pile
 // -----------------------------------------------------------------------------
+#define BASE_ADDR 0x356
+#define END_ADDR 0x357
+
 #define STACK_SIZE 16
 #define INSTANCE_MAX 1
 
@@ -66,13 +70,16 @@ struct STACK {
 };
 
 struct STACK userdata[INSTANCE_MAX];
+
 unsigned int stack_instances = 0;
 
 static char *description = "Hardware stack";
 
 // -----------------------------------------------------------------------------
-//
+//                              plugin_init
 // -----------------------------------------------------------------------------
+// Run once right after thz library load
+//
 SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 {
     dbg_printf("---plugin init\n");
@@ -84,9 +91,10 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     return SDL_TRUE;
 }
 
-    // -----------------------------------------------------------------------------
-    //
-    // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+//                              plugin_create
+// -----------------------------------------------------------------------------
+// Called to create a new instance of the extension
 unsigned int stack_create(struct machine *oric)
 {
     oric = oric; // gcc [-Wunused-parameter]
@@ -97,23 +105,19 @@ unsigned int stack_create(struct machine *oric)
     return ++stack_instances;
 }
 
-    // -----------------------------------------------------------------------------
-    //
-    // -----------------------------------------------------------------------------
-SDL_bool stack_shutdown(struct machine *oric, unsigned int instance)
-{
-    oric = oric; // gcc [-Wunused-parameter]
-    instance = instance; // gcc [-Wunused-parameter]
-
-    return SDL_TRUE;
-}
+// -----------------------------------------------------------------------------
+//                              plugin_shutdown
+// -----------------------------------------------------------------------------
+// Called on exit
+// Not used
 
 // -----------------------------------------------------------------------------
-//
+//                                  plugin_reset
 // -----------------------------------------------------------------------------
-SDL_bool stack_reset(struct expansion_bus *oric, unsigned int instance)
+// Called by init_machine and [F4]
+SDL_bool stack_reset(struct expansion_bus *oric_bus, unsigned int instance)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
 
     dbg_printf("stack_reset(%d)\n", instance);
 
@@ -130,14 +134,14 @@ SDL_bool stack_reset(struct expansion_bus *oric, unsigned int instance)
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //                          Lecture de la pile (POP)
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-Uint8 stack_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+// -------------------------------------------------------------------------
+//                          Lecture de la pile (POP)
+// -------------------------------------------------------------------------
+// run: FALSE -> exécution depuis le moniteur
+// Read access
+Uint8 stack_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
     fBank = fBank; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > stack_instances) )
@@ -165,14 +169,14 @@ Uint8 stack_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Ui
     }
 }
 
-    // -------------------------------------------------------------------------
-    //                      Ecriture dasn la pile (PUSH)
-    // -------------------------------------------------------------------------
-    // run: FALSE -> exécution depuis le moniteur
-    //
-SDL_bool stack_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+// -------------------------------------------------------------------------
+//                      Ecriture dasn la pile (PUSH)
+// -------------------------------------------------------------------------
+// run: FALSE -> exécution depuis le moniteur
+// Write access
+SDL_bool stack_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
     fBank = fBank; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > stack_instances) )
@@ -199,9 +203,12 @@ SDL_bool stack_write(struct machine *oric, SDL_bool fBank, unsigned int instance
     return SDL_TRUE;
 }
 
-    // -------------------------------------------------------------------------
-    //                  Mise à jour de la page du moniteur
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//                  Mise à jour de la page du moniteur
+// -------------------------------------------------------------------------
+// Monitor page
+// Rows: 19 (1-19)
+// Columns: 28 (1-28)
 void mon_stack_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     if ( (!instance) || (instance > stack_instances) )
@@ -253,9 +260,10 @@ void mon_stack_update(struct textzone *tz, unsigned int instance, Uint16 base_ad
 //    tzstrpos(tz, 1, 15, "....+....|....+....|....+...");
 }
 
-    // -------------------------------------------------------------------------
-    //                      Sauvegarde de l'état
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//                      Sauvegarde de l'état
+// -------------------------------------------------------------------------
+// Called by monitor
 void mon_stack_store(struct machine *oric, unsigned int instance)
 {
     oric = oric; // gcc [-Wunused-parameter]
@@ -273,11 +281,11 @@ void mon_stack_store(struct machine *oric, unsigned int instance)
 //
 // -----------------------------------------------------------------------------
 struct PLUGIN plugin = { "STACK",
-                0x0360, 2,
+                BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 PLG_DEVICE,
                 NULL,
                 stack_create,
-                stack_shutdown,
+                NULL,
                 stack_reset,
                 stack_read,
                 stack_write,

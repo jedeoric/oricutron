@@ -85,12 +85,25 @@ struct BOARD {
 
     unsigned int bank;
 
-    // 0x0320 - 0x0323
+    // 0x0320 - 0x032f
     unsigned char DDRA;
     unsigned char IORAh;
 
     unsigned char DDRB;
     unsigned char IORB;
+
+    unsigned char T1CL;
+    unsigned char TiCH;
+    unsigned char T1LL;
+    unsigned char TILH;
+    unsigned char T2CL;
+    unsigned char T2CH;
+    unsigned char SR;
+    unsigned char ACR;
+    unsigned char PCR;
+    unsigned char IFR;
+    unsigned char IER;
+    unsigned char IORA;
 
     // 0x0342 - 0x0343
     unsigned char t_register;                   // ?xRx xVVV
@@ -164,7 +177,7 @@ SDL_bool twilighte_addresses(unsigned int instance,  Uint16 offset)
     instance--;
 
     // [base_addr, base_addr+3]
-    if (offset <= 0x03)
+    if (offset <= 0x0f)
         return SDL_TRUE;
 
     // [base_addr+0x0c, base_addr+0x0f]
@@ -185,7 +198,7 @@ unsigned int twilighte_create(struct machine *oric)
     if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
-//    oric->romdis = SDL_FALSE;
+//    *oric->romdis = SDL_FALSE;
 
     return ++plugin_instances;
 }
@@ -206,16 +219,22 @@ SDL_bool twilighte_shutdown(struct machine *oric, unsigned int instance)
 //                                  twilighte_reset
 // -----------------------------------------------------------------------------
 // Called by init_machine and [F4]
-SDL_bool twilighte_reset(struct expansion_bus *oric, unsigned int instance)
+SDL_bool twilighte_reset(struct expansion_bus *oric_bus, unsigned int instance)
 {
     dbg_printf("TWILIGHTE_reset(%d)\n", instance);
-    error_printf(": oric->romdis = %02x\n", oric->romdis);
-    error_printf(": oric->cpu.a  = %02x\n", oric->cpu->a);
+    error_printf(": oric->romdis = %02x\n", *oric_bus->romdis);
+    error_printf(": oric->type  = %02x\n", oric_bus->type);
 
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
     instance--;
+
+//    if (oric_bus->type != MACH_ATMOS)
+//    {
+//        error_printf("TWILIGHTE: NOT AN ATMOS");
+//        return SDL_FALSE;
+//    }
 
     userdata[instance].firmware_version = 2;
     userdata[instance].t_register = (userdata[instance].firmware_version & 0x03) | 0x80;
@@ -230,9 +249,9 @@ SDL_bool twilighte_reset(struct expansion_bus *oric, unsigned int instance)
     config_load(&userdata[instance]);
 
     // Désactive la rom interne
-    *oric->romdis = SDL_TRUE;
+    *oric_bus->romdis = SDL_TRUE;
     // Défaut par setromon()
-    // oric->romon = ! oric->romdis;
+    // oric_bus->romon = ! oric_bus->romdis;
 
     return SDL_TRUE;
 }
@@ -242,12 +261,12 @@ SDL_bool twilighte_reset(struct expansion_bus *oric, unsigned int instance)
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Read access
-Uint8 twilighte_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
+Uint8 twilighte_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 offset, SDL_bool run)
 {
     Uint8 data = 0;
     unsigned int bank;
 
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
     run = run; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -256,18 +275,19 @@ Uint8 twilighte_read(struct machine *oric, SDL_bool fBank, unsigned int instance
     instance--;
 /*
     if (!fBank)
-        dbg_printf("TWILIGHTE READ: port @$%04x, romdis %d\n", offset, oric->romdis);
+        dbg_printf("TWILIGHTE READ: port @$%04x, romdis %d\n", offset, *oric->romdis);
     else
-        dbg_printf("TWILIGHTE READ: bank @$%04x, romdis %d\n", offset+0xc000, oric->romdis);
+        dbg_printf("TWILIGHTE READ: bank @$%04x, romdis %d\n", offset+0xc000, *oric->romdis);
 */
     if (!fBank)
-        // Lecture d'un registrte
+        // Lecture d'un registre
         switch (offset)
         {
 //            case 0x314-0x314:
 //                // 0x314: Microdisc mirror
 //                break;
 
+            // VIA2
             case 0x320-BASE_ADDR:
                 // 0x320: IORB
                 // /!\ ATTENTION joytsticks non pris en compte pour le moment
@@ -290,6 +310,56 @@ Uint8 twilighte_read(struct machine *oric, SDL_bool fBank, unsigned int instance
                 data = userdata[instance].DDRA;
                 break;
 
+            // Autres registres VIA non émulés correctement
+            case 0x324-BASE_ADDR:
+                data = userdata[instance].T1CL;
+                break;
+
+            case 0x325-BASE_ADDR:
+                data = userdata[instance].TiCH;
+                break;
+
+            case 0x326-BASE_ADDR:
+                data = userdata[instance].T1LL;
+                break;
+
+            case 0x327-BASE_ADDR:
+                data = userdata[instance].TILH;
+                break;
+
+            case 0x328-BASE_ADDR:
+                data = userdata[instance].T2CL;
+                break;
+
+            case 0x329-BASE_ADDR:
+                data = userdata[instance].T2CH;
+                break;
+
+            case 0x32a-BASE_ADDR:
+                data = userdata[instance].SR;
+                break;
+
+            case 0x32b-BASE_ADDR:
+                data = userdata[instance].ACR;
+                break;
+
+            case 0x32c-BASE_ADDR:
+                data = userdata[instance].PCR;
+                break;
+
+            case 0x32d-BASE_ADDR:
+                data = userdata[instance].IFR;
+                break;
+
+            case 0x32e - BASE_ADDR:
+                data = userdata[instance].IER;
+                break;
+
+            case 0x32f-BASE_ADDR:
+                data = userdata[instance].IORA;
+                break;
+
+            // Twilighte registers
             case 0x342-BASE_ADDR:
                 // 0x342: Extension register
                 data = userdata[instance].t_register;
@@ -327,11 +397,11 @@ Uint8 twilighte_read(struct machine *oric, SDL_bool fBank, unsigned int instance
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
 // Write access
-SDL_bool twilighte_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
+SDL_bool twilighte_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 offset, Uint8 data)
 {
     unsigned int bank;
 
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
@@ -353,14 +423,18 @@ SDL_bool twilighte_write(struct machine *oric, SDL_bool fBank, unsigned int inst
 //                // 0x314: Microdisc mirror
 //                break;
 
+            // VIA2
             case 0x320-BASE_ADDR:
                 // 0x320: IORB
-                userdata[instance].IORB = data & userdata[instance].DDRB;
+                // /!\ ATTENTION joytsticks non pris en compte pour le moment (aucun bouton appuyé, pull-up des entrées)
+                userdata[instance].IORB = (data & userdata[instance].DDRB) | (~userdata[instance].DDRB);
                 break;
 
             case 0x321-BASE_ADDR:
                 // 0x321: IORAh
-                userdata[instance].IORAh = data & userdata[instance].DDRA;
+                // /!\ ATTENTION joytsticks non pris en compte pour le moment (on force aucun bouton appuyé, pull-up des entrées)
+                userdata[instance].IORAh = (data & userdata[instance].DDRA) | (~userdata[instance].DDRA);
+                userdata[instance].IORA = userdata[instance].IORAh;
                 break;
 
             case 0x322-BASE_ADDR:
@@ -373,6 +447,57 @@ SDL_bool twilighte_write(struct machine *oric, SDL_bool fBank, unsigned int inst
                 userdata[instance].DDRA = data;
                 break;
 
+            // Autres registres VIA non émulés correctement
+            case 0x324-BASE_ADDR:
+                userdata[instance].T1CL = data;
+                break;
+
+            case 0x325-BASE_ADDR:
+                userdata[instance].TiCH = data;
+                break;
+
+            case 0x326-BASE_ADDR:
+                userdata[instance].T1LL = data;
+                break;
+
+            case 0x327-BASE_ADDR:
+                userdata[instance].TILH = data;
+                break;
+
+            case 0x328-BASE_ADDR:
+                userdata[instance].T2CL = data;
+                break;
+
+            case 0x329-BASE_ADDR:
+                userdata[instance].T2CH = data;
+                break;
+
+            case 0x32a-BASE_ADDR:
+                userdata[instance].SR = data;
+                break;
+
+            case 0x32b-BASE_ADDR:
+                userdata[instance].ACR = data;
+                break;
+
+            case 0x32c-BASE_ADDR:
+                userdata[instance].PCR = data;
+                break;
+
+            case 0x32d-BASE_ADDR:
+                userdata[instance].IFR = data;
+                break;
+
+            case 0x32e - BASE_ADDR:
+                userdata[instance].IER = data;
+                break;
+
+            case 0x32f-BASE_ADDR:
+                userdata[instance].IORA = (data & userdata[instance].DDRA) | (~userdata[instance].DDRA);
+                userdata[instance].IORAh = userdata[instance].IORA;
+                break;
+
+            // Twilighte registers
             case 0x342-BASE_ADDR:
                 // 0x342: Extension register
                 // b5: 0->ROM, 1->RAM

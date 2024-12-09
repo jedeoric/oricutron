@@ -83,12 +83,15 @@ struct plugin_opts
 };
 
 
+static void machine_reset(struct machine *oric);
+
 
 // -----------------------------------------------------------------------------
 // INTERNAL
 // -----------------------------------------------------------------------------
 SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uint16 addr_start, SDL_bool enable)
 {
+
     if (plugin == NULL)
         return SDL_FALSE;
 
@@ -99,11 +102,16 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
         name = plugin->name;
 
     int i = periph_find_by_name(name);
-    if (i != nb_periph) return SDL_FALSE;
+    if (i != nb_periph)
+    {
+        error_printf("Plugin add: duplicate device '%s' (id = %d, %d)", name, i, nb_periph);
+        return SDL_FALSE;
+    }
 
     if (addr_start == 0)
         addr_start = plugin->default_addr;
 
+    // plugin->create peut utiliser oric->type et oric->drivetype
     int instance = plugin->create(oric);
 
     if (!instance)
@@ -172,6 +180,9 @@ SDL_bool periph_enable_by_id(int id, SDL_bool enable)
 
     devices_table[id].enable = enable;
 
+    // Mise à jour du menu
+    periphitems[id].name[0] = (enable ? 14 : 32);
+
     return SDL_TRUE;
 }
 
@@ -212,13 +223,15 @@ SDL_bool periph_reset_by_name(struct machine *oric, char *name)
 // -------------------------------------------------------------------------
 // INTERNAL
 // -------------------------------------------------------------------------
-SDL_bool periph_reset_by_id(struct expansion_bus *oric, int id)
+SDL_bool periph_reset_by_id(struct expansion_bus *oric_bus, int id)
 {
     if ( (id < 0) || (id >= nb_periph) )
         return SDL_FALSE;
 
+    // plugin->reset peut utiliser oric_bus->type et oric_bus->drivetype
+
     if (devices_table[id].periph->reset != NULL)
-        return (devices_table[id].periph->reset(oric, devices_table[id].instance));
+        return (devices_table[id].periph->reset(oric_bus, devices_table[id].instance));
 
     else
         return SDL_TRUE;
@@ -231,9 +244,14 @@ SDL_bool periph_reset_all(struct machine *oric)
 {
     int i=0;
 
-    struct expansion_bus myoric;
-    myoric.cpu = &oric->cpu;
-    myoric.romdis =  &oric->romdis;
+    struct expansion_bus oric_bus;
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.reset = SDL_TRUE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
 
     while (i != nb_periph)
     {
@@ -241,7 +259,9 @@ SDL_bool periph_reset_all(struct machine *oric)
         {
             dbg_printf("PERIPH init: %s\n", devices_table[i].name);
 
-            devices_table[i].periph->reset(&myoric, devices_table[i].instance);
+            // plugin->reset peut utiliser oric->type et oric->drivetype
+            if ( !devices_table[i].periph->reset(&oric_bus, devices_table[i].instance) )
+                periph_enable_by_id(i, SDL_FALSE);
         }
         i++;
     }
@@ -256,16 +276,30 @@ SDL_bool periph_reset_all(struct machine *oric)
 SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
 {
     int i=0;
+    struct expansion_bus oric_bus;
+
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.reset = SDL_FALSE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
+
     while (i != nb_periph)
     {
         if (devices_table[i].enable && (devices_table[i].periph->ticktock != NULL))
         {
             // dbg_printf("PERIPH ticktock: %s\n", devices_table[i].name);
 
-            devices_table[i].periph->ticktock(oric, devices_table[i].instance, cycles);
+            devices_table[i].periph->ticktock(&oric_bus, devices_table[i].instance, cycles);
         }
         i++;
     }
+
+    if (oric_bus.reset)
+        machine_reset(oric);
+
     return SDL_TRUE;
 }
 
@@ -317,6 +351,18 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
     SDL_bool fBank = SDL_FALSE;
 
     int i=periph_find_by_addr(oric, addr);
+
+    struct expansion_bus oric_bus;
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.address = addr;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
+    // oric_bus.reset = SDL_FALSE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
+
     Uint8 data = 0;
 
     if (i < nb_periph)
@@ -334,7 +380,7 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
             addr = addr - devices_table[i].addr_start;
 
         if (devices_table[i].periph->read != NULL)
-            data = devices_table[i].periph->read(oric, fBank, devices_table[i].instance, addr, SDL_TRUE);
+            data = devices_table[i].periph->read(&oric_bus, fBank, devices_table[i].instance, addr, SDL_TRUE);
 
         // dbg_printf(" -> $%02x\n", data);
         return data;
@@ -351,6 +397,17 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
     int i=periph_find_by_addr(oric, addr);
     SDL_bool fbank = (addr >= 0xc000);
 
+    struct expansion_bus oric_bus;
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.address = addr;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
+    // oric_bus.reset = SDL_FALSE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
+
     if (i < nb_periph)
     {
         // dbg_printf("PERIPH WRITE: %s ($%04x): $%02x (from $%04x)\n", devices_table[i].name, addr, data, oric->cpu.lastpc);
@@ -361,7 +418,7 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
             addr = addr - devices_table[i].addr_start;
 
         if (devices_table[i].periph->write != NULL)
-            return devices_table[i].periph->write(oric, fbank, devices_table[i].instance, addr, data);
+            return devices_table[i].periph->write(&oric_bus, fbank, devices_table[i].instance, addr, data);
     }
 
     // Pas de périphérique pour l'adresse demandée
@@ -568,6 +625,17 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(oric, addr);
 
+    struct expansion_bus oric_bus;
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.address = addr;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
+    // oric_bus.reset = SDL_FALSE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
+
     if (i < nb_periph)
     {
         Uint8 data = 0;
@@ -582,7 +650,7 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
             else
                 addr = addr - devices_table[i].addr_start;
 
-            data = devices_table[i].periph->read(oric, (addr >= 0xc000), devices_table[i].instance, addr, SDL_FALSE);
+            data = devices_table[i].periph->read(&oric_bus, (addr >= 0xc000), devices_table[i].instance, addr, SDL_FALSE);
             dbg_printf(" -> $%02x\n", data);
         }
         else
@@ -732,9 +800,14 @@ void mon_periph_oldvalid(SDL_bool oldvalid)
 // Toggle extension on/off
 void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
 {
-    struct expansion_bus myoric;
-    myoric.cpu = &oric->cpu;
-    myoric.romdis =  &oric->romdis;
+    struct expansion_bus oric_bus;
+    oric_bus.cpu = &oric->cpu;
+    oric_bus.romdis =  &oric->romdis;
+    oric_bus.irq =  &oric->cpu.irq;
+    oric_bus.reset = SDL_FALSE;
+
+    oric_bus.type =  oric->type;
+    oric_bus.drivetype = oric->drivetype;
 
     if( periph_enabled_by_id(id) )
     {
@@ -746,15 +819,19 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
         return;
     }
 
-    // Le périphérique était désactivé, on l'active...
-    periph_enable_by_id(id, SDL_TRUE);
-
-    // .. et on l'initialise
+    // Le périphérique était désactivé, on l'initialise...
     // À voir si on conserve l'initialisation dans ce cas
-    periph_reset_by_id(&myoric, id);
+    if (periph_reset_by_id(&oric_bus, id))
+    {
+        // .. et on l'ective
+        periph_enable_by_id(id, SDL_TRUE);
 
-    // Mise à jour du menu OSD
-    mitem->name[0] = 14;
+        // Mise à jour du menu OSD
+        mitem->name[0] = 14;
+
+        if (oric_bus.reset)
+            machine_reset(oric);
+    }
 }
 
 
@@ -814,45 +891,14 @@ SDL_bool periph_test(struct machine *oric)
     {
         load_devices_config(oric);
 
-    /*
-        // Déclaration des périphériques
-        plugin=load_plugin("libstack.so");
-        if (plugin != NULL)
-            if (!periph_add(oric, plugin, NULL, 0x360, SDL_FALSE))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-
-        plugin = load_plugin("libregister.so");
-        if (plugin != NULL)
-        {
-            if (!periph_add(oric, plugin, "Reg 0", 0x362, SDL_FALSE))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-
-            if (!periph_add(oric, plugin, "Reg 1", 0x366, SDL_FALSE))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-        }
-
-        // On suppose que le fichier de configuration a déjà été lu
-        plugin=load_plugin("libch376.so");
-        if (plugin != NULL)
-            if (!periph_add(oric, plugin, NULL, 0x340, oric->ch376_activated))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-
-        plugin=load_plugin("libds1501.so");
-        if (plugin != NULL)
-            if (!periph_add(oric, plugin, NULL, 0, oric->ds1501_activated))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-
-        plugin=load_plugin("libdebug.so");
-        if (plugin != NULL)
-            if (!periph_add(oric, plugin, NULL, 0, SDL_FALSE))
-                dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
-    */
-
         // Création du menu OSD
         periphitems = calloc(nb_periph+3, sizeof(struct osdmenuitem));
 
         if (periphitems == NULL)
-            dbg_printf("*** ERROR CALLOC\n");
+        {
+            error_printf("*** ERROR CALLOC\n");
+            return SDL_FALSE;
+        }
 
         for (int i=0; i<nb_periph; i++)
         {
@@ -866,7 +912,10 @@ SDL_bool periph_test(struct machine *oric)
                 sprintf(periphitems[i].name, "%c%-*s    $%04X", (devices_table[i].enable ? 14 : 32), PERIPH_NAME_LEN, devices_table[i].name, devices_table[i].addr_start);
 
             else
-                dbg_printf("*** MALLOC ERROR ***\n");
+            {
+                error_printf("*** MALLOC ERROR ***\n");
+                return SDL_FALSE;
+            }
 
             periphitems[i].func = toggleperiph;
             periphitems[i].arg = i;
@@ -882,6 +931,7 @@ SDL_bool periph_test(struct machine *oric)
         periphitems[nb_periph+1].arg    = 1;            // Menu Hardware
 
         // Intégration du menu dans le menu principal
+        // 8: indice du menu dans le tableau menus[] de gui.c
         menus[8].items = periphitems;
     }
 
@@ -976,7 +1026,7 @@ SDL_bool load_devices_config(struct machine *oric)
                     device =  (sto->device[0] != '\0' ? sto->device : NULL);
 
                     if (!periph_add(oric, plugin, device, sto->base_address, sto->enable))
-                        dbg_printf("periph_test: erreur lors de l'ajout du périphérique\n");
+                        error_printf("load_device_config: erreur lors de l'ajout du périphérique: %s (%s)", sto->device, sto->plugin);
                 }
             }
         }
@@ -988,4 +1038,20 @@ SDL_bool load_devices_config(struct machine *oric)
     return SDL_TRUE;
 }
 
-
+// -----------------------------------------------------------------------------
+// INTERNAL
+// -----------------------------------------------------------------------------
+static void machine_reset(struct machine *oric)
+{
+    #ifndef WWW_NO_MONITOR
+      mon_state_reset( oric );
+    #endif
+    if( !init_machine( oric, oric->type, SDL_FALSE ) )
+    {
+        shut( oric );
+    #ifdef __ANDROID__
+        error_printf("'init_machine' failed");
+    #endif
+        exit( EXIT_FAILURE );
+    }
+}
