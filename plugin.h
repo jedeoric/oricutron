@@ -3,6 +3,7 @@
 #define PLG_DEVICE 1
 #define PLG_BANK 2
 #define PLG_MULTI 4
+#define PLG_PRINTER 8
 
 struct expansion_bus {
     struct m6502 *cpu;
@@ -11,10 +12,17 @@ struct expansion_bus {
     Uint8 *irq;
     SDL_bool io;
     SDL_bool reset;
+    SDL_bool nmi;
 
     // Utilitaires
     Uint8 type;
     int drivetype;
+};
+
+struct printer_port {
+	Uint8 data;
+	Uint8 strobe;
+	Uint8 acknowledge;
 };
 
 struct PLUGIN {
@@ -36,7 +44,7 @@ struct PLUGIN {
     void (*mon_update)(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid);
     void (*mon_store_state)(struct machine *oric, unsigned int instance);
 };
-
+/*
 struct PLUGINS {
     Uint16 addr_start;
     Uint16 addr_end;
@@ -44,4 +52,4 @@ struct PLUGINS {
     SDL_bool enable;
     struct PLUGIN *periph;
 };
-
+*/

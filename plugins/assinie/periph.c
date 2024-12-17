@@ -85,7 +85,6 @@ struct plugin_opts
 
 static void machine_reset(struct machine *oric);
 
-
 // -----------------------------------------------------------------------------
 // INTERNAL
 // -----------------------------------------------------------------------------
@@ -134,6 +133,9 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
     devices_table[i].enable = enable;
 
     devices_table[i].type = devices_table[i].periph->type;
+
+    if ( devices_table[i].enable && (devices_table[i].type & PLG_PRINTER) )
+        oric->printenable = SDL_FALSE;
 
     nb_periph++;
 
@@ -249,6 +251,7 @@ SDL_bool periph_reset_all(struct machine *oric)
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.reset = SDL_TRUE;
+    oric_bus.nmi =  SDL_FALSE;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -282,6 +285,7 @@ SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.reset = SDL_FALSE;
+    oric_bus.nmi =  oric->cpu.nmi;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -299,6 +303,9 @@ SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
 
     if (oric_bus.reset)
         machine_reset(oric);
+
+    else if ( (oric_bus.nmi) && (oric_bus.nmi != oric_bus.cpu->nmi) )
+        softresetoric(oric, NULL, 0);
 
     return SDL_TRUE;
 }
@@ -358,7 +365,8 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
-    // oric_bus.reset = SDL_FALSE;
+    oric_bus.reset = SDL_FALSE;
+    oric_bus.nmi =  oric->cpu.nmi;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -380,7 +388,15 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
             addr = addr - devices_table[i].addr_start;
 
         if (devices_table[i].periph->read != NULL)
+        {
             data = devices_table[i].periph->read(&oric_bus, fBank, devices_table[i].instance, addr, SDL_TRUE);
+
+            if (oric_bus.reset)
+                machine_reset(oric);
+
+            else if ( (oric_bus.nmi) && (oric_bus.nmi != oric_bus.cpu->nmi) )
+                softresetoric(oric, NULL, 0);
+        }
 
         // dbg_printf(" -> $%02x\n", data);
         return data;
@@ -403,7 +419,8 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
-    // oric_bus.reset = SDL_FALSE;
+    oric_bus.reset = SDL_FALSE;
+    oric_bus.nmi =  oric->cpu.nmi;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -418,7 +435,17 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
             addr = addr - devices_table[i].addr_start;
 
         if (devices_table[i].periph->write != NULL)
-            return devices_table[i].periph->write(&oric_bus, fbank, devices_table[i].instance, addr, data);
+        {
+            SDL_bool ret =  devices_table[i].periph->write(&oric_bus, fbank, devices_table[i].instance, addr, data);
+
+            if (oric_bus.reset)
+                machine_reset(oric);
+
+            else if ( (oric_bus.nmi) && (oric_bus.nmi != oric_bus.cpu->nmi) )
+                softresetoric(oric, NULL, 0);
+
+            return ret;
+        }
     }
 
     // Pas de périphérique pour l'adresse demandée
@@ -498,6 +525,42 @@ int periph_find_by_addr(struct machine *oric, Uint16 addr)
     dbg_printf("%d\n", i);
 
     return i;
+}
+
+// -------------------------------------------------------------------------
+// INTERNAL
+// -------------------------------------------------------------------------
+int periph_find_by_type(Uint16 type)
+{
+    int i = 0;
+
+    while ( (i < nb_periph) && !(devices_table[i].type & type) ) i++;
+
+    return i;
+}
+
+// -------------------------------------------------------------------------
+// USED
+// -------------------------------------------------------------------------
+SDL_bool device_printer(Uint8 data, SDL_bool rw)
+{
+    int i = periph_find_by_type(PLG_PRINTER);
+    if ( i >= nb_periph)
+        return SDL_FALSE;
+
+    if (rw)
+    {
+        // Read
+        error_printf("/// printer -> %02X", data);
+    }
+    else
+    {
+        // Write
+        error_printf("/// %02X -> printer", data);
+        devices_table[i].periph->write(NULL, SDL_FALSE, devices_table[i].instance, 0, data);
+    }
+
+    return SDL_TRUE;
 }
 
 // -------------------------------------------------------------------------
@@ -631,7 +694,8 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.io = ((addr >= 0x300) && (addr <= 0x3ff));
-    // oric_bus.reset = SDL_FALSE;
+    oric_bus.reset = SDL_FALSE;
+    oric_bus.nmi =  oric->cpu.nmi;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -651,6 +715,13 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
                 addr = addr - devices_table[i].addr_start;
 
             data = devices_table[i].periph->read(&oric_bus, (addr >= 0xc000), devices_table[i].instance, addr, SDL_FALSE);
+
+            if (oric_bus.reset)
+                machine_reset(oric);
+
+            else if ( (oric_bus.nmi) && (oric_bus.nmi != oric_bus.cpu->nmi) )
+                softresetoric(oric, NULL, 0);
+
             dbg_printf(" -> $%02x\n", data);
         }
         else
@@ -805,6 +876,7 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
     oric_bus.romdis =  &oric->romdis;
     oric_bus.irq =  &oric->cpu.irq;
     oric_bus.reset = SDL_FALSE;
+    oric_bus.nmi =  SDL_FALSE;
 
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
@@ -831,6 +903,9 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
 
         if (oric_bus.reset)
             machine_reset(oric);
+
+        else if (oric_bus.nmi)
+            softresetoric(oric, NULL, 0);
     }
 }
 

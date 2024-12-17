@@ -207,6 +207,8 @@ unsigned int twilighte_create(struct machine *oric)
 //                              twilighte_shutdown
 // -----------------------------------------------------------------------------
 // Called on exit
+// Not used
+/*
 SDL_bool twilighte_shutdown(struct machine *oric, unsigned int instance)
 {
     oric = oric; // gcc [-Wunused-parameter]
@@ -214,6 +216,7 @@ SDL_bool twilighte_shutdown(struct machine *oric, unsigned int instance)
 
     return SDL_TRUE;
 }
+*/
 
 // -----------------------------------------------------------------------------
 //                                  twilighte_reset
@@ -890,7 +893,7 @@ struct PLUGIN plugin = { "Twilghte",
                 PLG_DEVICE | PLG_MULTI | PLG_BANK,
                 twilighte_addresses,
                 twilighte_create,
-                twilighte_shutdown,
+                NULL,
                 twilighte_reset,
                 twilighte_read,
                 twilighte_write,

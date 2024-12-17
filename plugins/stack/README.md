@@ -81,7 +81,7 @@ Ajouter les lignes suivantes dans le fichier plugins.cfg:
     ; base_addr = $356
 
 >[!NOTE]
->Ce plugin n'autorise su'une instance.
+>Ce plugin n'autorise qu'une instance.
 
 ## Utilisation du plugin
 

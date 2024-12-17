@@ -201,8 +201,8 @@ void inserttape( struct machine *oric, struct osdmenuitem *mitem, int dummy );
 void insertdisk( struct machine *oric, struct osdmenuitem *mitem, int drive );
 void resetoric( struct machine *oric, struct osdmenuitem *mitem, int dummy );
 void toggletapeturbo( struct machine *oric, struct osdmenuitem *mitem, int dummy );
-void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // [Assinie] - Tests
+// void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // void toggletwilighte(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // --]
 void toggleautowind( struct machine *oric, struct osdmenuitem *mitem, int dummy );
@@ -1565,11 +1565,11 @@ void toggleaciabackend( struct machine *oric, struct osdmenuitem *mitem, int dum
 }
 
 // Toggle ch376 on/off
+// [Assinie] - Tests
+// [--
+/*
 void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 {
-    // [Assinie] - Tests
-    // [--
-/*
 
 	if (oric->ch376_activated)
 	{
@@ -1583,9 +1583,9 @@ void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 	oric->ch376 = ch376_oric_init();
 	if (oric->ch376 != NULL)
 		ch376_oric_config(oric->ch376);
-*/
-    // -]
 }
+*/
+// -]
 
 // [Assinie] - Tests
 /*

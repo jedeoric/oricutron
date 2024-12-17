@@ -2130,6 +2130,7 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
   // -]
   periph_reset_all(oric);
   error_printf("init_machine: apres periph_reset, romdis=%d", oric->romdis);
+  error_printf("init_machine: apres periph_reset, printenable=%d", oric->printenable);
   // -]
 
   setromon( oric );
