@@ -181,6 +181,7 @@ union CommandData
     uint8_t          CMD_SocketState[1];
     uint8_t          CMD_SocketWriteBuffer[1];
     uint8_t          CMD_SocketGetRecvLen[1];
+    uint8_t          CMD_SocketGetRecvBuf[4]; // Store socket, low length and high length : 4 to manage overflow
     uint8_t          CMD_SocketGetIntStatusSn[1];
     uint8_t          CMD_SocketTCPListenSn[1];
 
@@ -199,8 +200,8 @@ struct ch395
     CH395_U8 buffer[24576];
     CH395_U8 mac_address[6];
     CH395_U8 ip_chip[20];
-    CH395_U8 socket_state[8]; // Socket state
-    CH395_U8 socket_proto[8]; // Socket proto
+    CH395_U8 socket_proto[8]; // Store protocol
+    CH395_U8 socket_status_sn[8][2];
     CH395_U8 socket_dest_port[8][2];
     CH395_U8 socket_src_port[8][2];
     CH395_U8 socket_dest_ip[8][4];
@@ -211,8 +212,8 @@ struct ch395
     CH395_BOOL is_init;
     CH395_U16 buffer_position_receive[8]; // Position receveive buffer for each socket
     CH395_U8 buffer_position_transmit[8]; // Position receveive buffer for each socket
-    CH395_U16 buffer_position_write_from_data[8]; // ptr  send data into buffer from cpu
-    CH395_U16 buffer_position_read_from_data[8]; // ptr  receive data into buffer from cpu
+    CH395_U16 buffer_position_write_from_data[8]; // ptr send data into buffer from cpu
+    CH395_U16 buffer_position_read_from_data[8]; // ptr receive data into buffer from cpu
     CH395_U8 phy_state;
 
     CH395_U8 receive_buffer_start_block[8];
@@ -223,6 +224,5 @@ struct ch395
     int sockfd_host[8]; // Socket id for emulator
 
 
-    };
+};
 
-//struct ch395 * ch395_create(void *user_data);
