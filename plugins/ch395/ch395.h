@@ -179,6 +179,7 @@ union CommandData
     uint8_t          CMD_SocketSetDesPort[3];
     uint8_t          CMD_SocketSetSrcPort[3];
     uint8_t          CMD_SocketState[1];
+    uint8_t          CMD_SocketTTL[1];
     uint8_t          CMD_SocketWriteBuffer[1];
     uint8_t          CMD_SocketGetRecvLen[1];
     uint8_t          CMD_SocketGetRecvBuf[4]; // Store socket, low length and high length : 4 to manage overflow
@@ -205,6 +206,7 @@ struct ch395
     CH395_U8 socket_dest_port[8][2];
     CH395_U8 socket_src_port[8][2];
     CH395_U8 socket_dest_ip[8][4];
+    CH395_U8 socket_ttl[8];
     CH395_U16 socket_length_received[8];
     CH395_U16 socket_length_to_send[8];
     CH395_U8 socket_int_status[8]; // Socket status

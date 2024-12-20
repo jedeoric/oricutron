@@ -26,6 +26,11 @@
 struct ch395 *userdata[INSTANCE_MAX];
 struct ch395 *userdata_old[INSTANCE_MAX];
 
+
+//Used for Linux 
+#define ROUTE_PATH "/proc/net/route"
+#define RESOLV_PATH "/etc/resolv.conf"
+
 /*
 TODO :
 * Etant donné que le CH395 doit avoir un source port, si la socket a une connexion en court de fermeture et qu'on essaie sur une autre socket ou sur la même
@@ -104,19 +109,6 @@ extern struct Library *SysBase;
 #define dbg_printf(...)
 #endif
 
-
-
-
-#if defined(__unix__) || defined(__APPLE__) || defined(__HAIKU__)
-
-/* /// "POSIX system functions" */
-
-static void * system_alloc_mem(int size)
-{
-    return malloc(size);
-}
-#endif
-
 #define BASE_ADDR 0x0360
 #define END_ADDR 0x0361
 
@@ -129,8 +121,7 @@ static char *description = "CH395";
 
 void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
 
-#define ROUTE_PATH "/proc/net/route"
-#define RESOLV_PATH "/etc/resolv.conf"
+
 
     FILE *route_file, *resolv_file;
     char iface[IF_NAMESIZE];
@@ -285,16 +276,7 @@ void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
     printf("Aucune passerelle par défaut trouvée.\n");
     return EXIT_FAILURE;
 }
-void ch395_init(struct ch395 *ch395)
-{
-    //is_init
-}
-/*
-void ch395_set_des_port_sn()
-{
 
-}
-*/
 int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 {
     char ip[16]; // 16 pour contenir l'IP au format "xxx.xxx.xxx.xxx\"
@@ -331,6 +313,8 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 
         printf("la Connexion semble établie vers : %s:%d\n",ip, port);
         dbg_printf("la Connexion semble établie vers : %s:%d\n",ip, port);
+        ch395->socket_status_sn[socketid][1] = CH395_TCP_ESTABLISHED;
+
     return 0;
 }
 
@@ -421,47 +405,12 @@ int ch395_create(struct machine *oric)
     }
 
     return 0;
-    // struct ch395 *ch395 = (struct ch395 *)malloc(sizeof(struct ch395));
-    // if(ch395)
-    // {
-    //     ch395->is_init = CH395_FALSE;
-    //     ch395->nb_bytes_in_cmd_data = 15; // ???
-    //     ch395_init_internal(ch395);
-    // }
-    // else
-    // {
-    //     free(ch395);
-    //     ch395 = NULL;
-    // }
-
-    // return ch395;
 }
 
 
-
-// void ch395_oric_reset(struct ch395 *ch395)
-// {
-
-// }
-
-// unsigned char 	ch395_oric_read(struct  ch395 *ch395, uint16_t addr)
-// {
-
-// }
-
-// void ch395_oric_config(struct ch395 *ch395)
-// {
-
-// }
-
-// void ch395_oric_destroy(struct ch395 *ch395)
-// {
-
-// }
-
 unsigned char ch395_read_command_port(struct ch395 *ch395)
 {
-    printf(">>[CH395][READ][COMMAND] read here\n");
+    printf(">>[CH395][READ][COMMAND] Can not read command port\n");
     return 0;
 }
 
@@ -472,11 +421,6 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
     char *value;
     msg = malloc(200);
     value = malloc(200);
-
-    // uint8_t data_out = 0xff; // Hi-Z
-    //printf(">>[CH395][READ][DATA] %d\n", ch395->command);
-
-    // dbg_printf(">> [READ][DATA] for during command &%02x status &%02x\n", ch395->command, ch395->command_status);
 
     switch(ch395->command)
     {
@@ -565,8 +509,9 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_RECV_LEN_SN]");
-            dbg_printf("<<[CH395][READ][COMMAND][CH395_CMD_GET_RECV_LEN_SN]");
+            char *msg = "<<[CH395][READ][DATA][CH395_CMD_GET_RECV_LEN_SN]";
+            printf("%s", msg);
+            dbg_printf("%s", msg);
             if ( ch395->pos_rw_in_cmd_data == 0 )
             {
                 data = ch395->buffer_position_receive[ch395->cmd_data.CMD_SocketGetRecvLen[0]] & 0xFF;
@@ -585,8 +530,9 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_SOCKET_STATUS_SN:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
+            char *msg_read_data_socket_status_sn = "<<[CH395][READ][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]";
+            printf("%s",msg_read_data_socket_status_sn);
+            dbg_printf("%s",msg_read_data_socket_status_sn);
 
             if ( ch395->pos_rw_in_cmd_data == 0 )
             {
@@ -655,13 +601,10 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
                 printf("Socket: %d socket  bla  protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
                 dbg_printf("Socket: %d socket bla protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
             }
-            // Reset states
-            //ch395->cmd_data.CMD_SocketState[0] = 0;
+
 
             ch395->pos_rw_in_cmd_data ++;
             break;
-
-
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
             printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS] value : %d \n",ch395->glob_int_status);
@@ -694,9 +637,9 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             unsigned char socket = ch395->cmd_data.CMD_SocketGetIntStatusSn[0];
             data = ch395->socket_int_status[socket];
             // When a socket is not open CH395_CMD_GET_INT_STATUS_SN command returns always 0 for socket state
-            // Clear status 
+            // Clear status
             // Each time CH395_CMD_GET_INT_STATUS_SN is read, we reset necessary status
-            //ch395->socket_int_status[socket] = 
+
 
             if (ch395->socket_int_status[socket] & CH395_SINT_STAT_SEND_OK)
             {
@@ -838,9 +781,13 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_SET_IP_ADDR:
+            break;
         case CH395_CMD_SET_GWIP_ADDR:
+            break;
         case CH395_CMD_SET_MASK_ADDR :
+            break;
         case CH395_CMD_SET_MAC_FILT:
+            break;
 
         case CH395_CMD_GET_PHY_STATUS:
             printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
@@ -1021,8 +968,13 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
         case CH395_CMD_SET_TCP_MSS:
             break;
+
         case CH395_CMD_SET_TTL:
+            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_TTL]\n");
+            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_TTL]\n");
+            ch395->command = CH395_CMD_SET_TTL;
             break;
+
         case CH395_CMD_SET_RECV_BUF:
             break;
         case CH395_CMD_SET_SEND_BUF:
@@ -1033,14 +985,23 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             ch395->command = CH395_CMD_SET_FUN_PARA;
             break;
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_CNT:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_SN:
+            break;
         case CH395_CMD_EEPROM_ERASE:
+            break;
         case CH395_CMD_EEPROM_WRITE:
+            break;
         case CH395_CMD_EEPROM_READ:
+            break;
         case CH395_CMD_READ_GPIO_REG:
+            break;
         case CH395_CMD_WRITE_GPIO_REG:
+            break;
         default:
             printf(">>[CH395][UNKNOWN]\n");
             break;
@@ -1187,13 +1148,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             ch395->cmd_data.CMD_SocketGetIntStatusSn[0] = data;
             ch395->nb_bytes_in_cmd_data ++;
-
-//#define CH395_SINT_STAT_TIM_OUT       0x40
-//#define CH395_SINT_STAT_DISCONNECT    0x10
-//#define CH395_SINT_STAT_CONNECT       0x08
-//#define CH395_SINT_STAT_RECV          0x04
-//#define CH395_SINT_STAT_SEND_OK       0x02
-//#define CH395_SINT_STAT_SENBUF_FREE   0x01
 
             break;
 
@@ -1390,12 +1344,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_CONNECT_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
-                // if (ch395->socket_state[data] == CH395_SOCKET_OPEN) {
-                //     printf("PANIC socket is not opened %d\n", data);
-                //     dbg_printf("PANIC socket is not opened %d\n", data);
-                //     return;
-                // }
-
                 ch395->cmd_data.CMD_SocketState[0] = data;
                 printf("Connecting socket %d ...\n", data);
                 dbg_printf(" Connecting socket %d ...\n", data);
@@ -1474,7 +1422,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     perror("Erreur lors de l'envoi de la requête");
                     return 1;
                 }
-                //ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]] | CH395_SINT_STAT_SEND_OK;
 
                 // Set SINT_STAT_SEND_OK
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]]  | CH395_SINT_STAT_SENBUF_FREE;
@@ -1482,8 +1429,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 p = &ch395->buffer[ch395->receive_buffer_start_block[ch395->cmd_data.CMD_SocketWriteBuffer[0]]*CH395_SIZE_BLOCK_BUFFER];
                 // Réception des données
 
-
-    // STAT_SEND_OK
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] | CH395_SINT_STAT_SEND_OK;
 
                 switch (ch395->cmd_data.CMD_SocketWriteBuffer[0])
@@ -1544,7 +1489,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 ch395->nb_bytes_in_cmd_data ++;
             }
 
-
             break;
 
         case CH395_CMD_CLOSE_SOCKET_SN:
@@ -1590,44 +1534,88 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_PPPOE_SET_USER_NAME:
-        case CH395_CMD_PPPOE_SET_PASSWORD:
-        case CH395_CMD_PPPOE_ENABLE:
-        case CH395_CMD_GET_PPPOE_STATUS:
-        case CH395_CMD_SET_TCP_MSS:
-        case CH395_CMD_SET_TTL:
-        case CH395_CMD_SET_RECV_BUF:
-        case CH395_CMD_SET_SEND_BUF:
-        case CH395_CMD_SET_FUN_PARA:
-
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA]\n");
             break;
+
+        case CH395_CMD_PPPOE_SET_PASSWORD:
+            break;
+
+        case CH395_CMD_PPPOE_ENABLE:
+            break;
+
+        case CH395_CMD_GET_PPPOE_STATUS:
+            break;
+
+        case CH395_CMD_SET_TCP_MSS:
+            break;
+
+        case CH395_CMD_SET_TTL:
+
+            switch(ch395->nb_bytes_in_cmd_data)
+            {
+                char *msg = ">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]";
+                case 0:
+
+                    ch395->cmd_data.CMD_SocketTTL[0] = data;
+                    printf("%s Setting socket : %d\n",msg, data);
+                    dbg_printf("%s %d\n",msg, data);
+                    ch395->pos_rw_in_cmd_data ++;
+                    break;
+                case 1:
+                    if (data > 128)
+                    {
+                        printf("%s PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",msg, data);
+                        dbg_printf("%s PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",msg, data);
+                    }
+                    else
+                    {
+                        printf("%s socket : %d TTL : \n",msg, ch395->cmd_data.CMD_SocketTTL[0], data);
+                        ch395->socket_ttl[ch395->cmd_data.CMD_SocketTTL[0]] = data;
+                        ch395->pos_rw_in_cmd_data ++;
+                    }
+                default:
+                    printf("%s PANIC : CH395_CMD_SET_TTL can not receive 3 bytes on data port %d\n",msg, data);
+                    dbg_printf("%s PANIC : CH395_CMD_SET_TTL can not receive 3 bytes on data port %d\n",msg, data);
+                    break;
+
+            }
+            break;
+
+        case CH395_CMD_SET_RECV_BUF:
+            break;
+
+        case CH395_CMD_SET_SEND_BUF:
+            break;
+
+        case CH395_CMD_SET_FUN_PARA:
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA] Not emulated\n");
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA] Not emulated\n");
+            break;
+
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_CNT:
+            break;
         case CH395_CMD_SET_KEEP_LIVE_SN:
+            break;
         case CH395_CMD_EEPROM_ERASE:
+            break;
         case CH395_CMD_EEPROM_WRITE:
+            break;
         case CH395_CMD_EEPROM_READ:
+            break;
         case CH395_CMD_READ_GPIO_REG:
+            break;
         case CH395_CMD_WRITE_GPIO_REG:
+            break;
         default:
             printf(">>[CH395][UNKNOWN]\n");
             break;
 
     }
 
-   // dbg_printf(">> [ch395][WRITE][COMMAND] Write command &%02x status &%02x\n", command, ch395->command_status);
 
-    // ch395->interface_status = 0;
-
-    // // Emulate CH376 bug which can get the check byte
-    // // from the command port instead of the data port!
-    // if(ch395->command == CH395_CMD_CHECK_EXIST)
-    // {
-    //     ch395->cmd_data.CMD_CheckByte = ~command;
-    //     dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] got check byte &%02x from command port!\n", command);
-    // }
     return 0;
 }
 
@@ -1643,7 +1631,7 @@ Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 
     if (addr == 0x00) ch395_read_data_port(userdata[instance]);
     if (addr == 0x01) ch395_read_command_port(userdata[instance]);
-
+    return (Uint8) 1;
 }
 
 SDL_bool ch395_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
@@ -1655,8 +1643,19 @@ SDL_bool ch395_write(struct machine *oric, SDL_bool fBank, unsigned int instance
 
     instance--;
 
-    if (addr == 0x00) ch395_write_data_port(userdata[instance], data);
-    if (addr == 0x01) ch395_write_command_port(userdata[instance], data);
+    if (addr == 0x00)
+    {
+        ch395_write_data_port(userdata[instance], data);
+        return CH395_TRUE;
+    }
+
+    if (addr == 0x01)
+    {
+        ch395_write_command_port(userdata[instance], data);
+        return CH395_TRUE;
+    }
+
+    return CH395_TRUE;
 
 }
 
@@ -1685,32 +1684,6 @@ SDL_bool ch395_addresses(unsigned int instance,  Uint16 offset)
     return SDL_FALSE;
 }
 
-/*
-unsigned int plugin_create(struct machine *oric)
-{
-    oric = oric; // gcc [-Wunused-parameter]
-
-    if (plugin_instances >= INSTANCE_MAX)
-        return 0;
-
-    userdata[plugin_instances] = malloc(sizeof(struct ch395));
-    userdata_old[plugin_instances] = malloc(sizeof(struct ch395));
-
-    if (userdata[plugin_instances])
-    {
-        if (userdata_old[plugin_instances] == NULL)
-        {
-            free(userdata[plugin_instances]);
-            return 0;
-        }
-
-
-      return ++plugin_instances;
-    }
-
-    return 0;
-}
-*/
 // -----------------------------------------------------------------------------
 //                              ch395_shutdown
 // -----------------------------------------------------------------------------
@@ -1746,32 +1719,7 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 SDL_bool ch395_reset(struct expansion_bus *oric, unsigned int instance)
 {
     dbg_printf("CH395_reset(%d)\n", instance);
-    /*
-    error_printf(": oric->romdis = %02x\n", oric->romdis);
-    error_printf(": oric->cpu.a  = %02x\n", oric->cpu->a);
 
-    if ( (!instance) || (instance > plugin_instances) )
-        return SDL_FALSE;
-
-    instance--;
-
-    userdata[instance].firmware_version = 2;
-    userdata[instance].t_register = (userdata[instance].firmware_version & 0x03) | 0x80;
-    userdata[instance].t_banking_register = 0;
-    userdata[instance].DDRA = 0xa7;         // 0b10100111;
-    userdata[instance].IORAh = 0x07;
-    userdata[instance].DDRB = 0xc0;         // 0b11000000;
-    userdata[instance].IORB = 0;
-
-
-    // À voir si on initialise avec des données aléatoires au lieu de 0x00
-    config_load(&userdata[instance]);
-
-    // Désactive la rom interne
-    *oric->romdis = SDL_TRUE;
-    // Défaut par setromon()
-    // oric->romon = ! oric->romdis;
-*/
     return SDL_TRUE;
 }
 
@@ -1783,8 +1731,9 @@ SDL_bool ch395_reset(struct expansion_bus *oric, unsigned int instance)
 // Monitor page
 // Rows: 19 (1-19)
 // Columns: 28 (1-28)
-void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
+void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid, SDL_bool run)
 {
+    int i;
     base_addr = base_addr; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -1792,40 +1741,98 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
 
     instance--;
 
-    // int bank;
-    // struct BOARD *twilighte = &userdata[instance];
-
+    //ptz->cfc = 5;
     dbg_printf("ch395: mon update (instance=%d)\n", instance);
-
-    //
-    // Board version = $xx
-    //
-    // Bank set      = $xx
-    // Bank hardware number = $xx
-    // Bank software number = $xx
-    // Bank type     = ssss
-    // ---------------------------
-    // Twil register = $xx
-    // Bank register = $xx
-    //
-    // IORB          = $xx
-    // IORAh         = $xx
-    // DDRB          = $xx
-    // DDRA          = $xx
-    //
-    //
-    //
-    //
-    //123456789.123456789.12345678
-/*
-    bank = logical_bank(twilighte);
-*/
+    //ch395->socket_status_sn[i][0]
     my_tzprintfpos( ptz, 2, 2,  "Initialized :  %02d", userdata[instance]->is_init);
+    my_tzprintfpos( ptz, 2, 3,  "S |  BUFBLOCK   | STATE |   FLAGS  | SN");
+    int pos_state = 4;
+    for (i = 0; i < 8 ; i++)
+    {
+        // Display socket ID
+        my_tzprintfpos( ptz, 2, 4 + i,  "%d",i);
+        pos_state = 5;
+        my_tzprintfpos( ptz, pos_state, 4 + i,  "R%02d/%02d", userdata[instance]->receive_buffer_start_block[i], userdata[instance]->receive_buffer_number_of_block[i]);
+        pos_state += 7;
+        my_tzprintfpos( ptz, pos_state, 4 + i,  "T%02d/%02d", userdata[instance]->transmit_buffer_start_block[i], userdata[instance]->transmit_buffer_number_of_block[i]);
+        pos_state += 7;
+        //
+        // Display block
+
+
+        switch(userdata[instance]->socket_status_sn[i][0])
+        {
+            case CH395_SOCKET_CLOSED:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "CLOSED");
+                break;
+            case CH395_SOCKET_OPEN:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "OPENED");
+                break;
+            default:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "ERR");
+                break;
+        }
+        pos_state += 8;
+        switch(userdata[instance]->socket_status_sn[i][1])
+        {
+            case CH395_TCP_CLOSED:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_CLOSED");
+                break;
+            case CH395_TCP_LISTEN:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_LISTEN");
+                break;
+            case CH395_TCP_ESTABLISHED:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_ESTABL");
+                break;
+            default:
+                my_tzprintfpos( ptz, pos_state, 4 + i,  "ERR");
+                break;
+        }
+
+
+
+        pos_state += 12;
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_TIM_OUT)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "TIM_OUT");
+            pos_state += strlen("TIM_OUT");
+        }
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_SEND_OK)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "SEND_OK");
+            pos_state += strlen("SEND_OK") + 1;
+        }
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_RECV)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "RECV");
+            pos_state += strlen("RECV");
+        }
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_SENBUF_FREE)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "SENBUF_FREE");
+            pos_state += strlen("SENBUF_FREE");
+        }
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_CONNECT)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "CONNECT");
+            pos_state += strlen("CONNECT");
+        }
+
+        if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_DISCONNECT)
+        {
+            my_tzprintfpos( ptz, pos_state, 4 + i,  "DISCONNECT");
+            pos_state += strlen("DISCONNECT");
+        }
+    }
+
+    // if (userdata[instance]->ch395->glob_int_status & )
  /*
-    my_tzprintfpos( ptz, 2, 4,  "Bank set      : $%02X", twilighte->t_banking_register );
-    my_tzprintfpos( ptz, 2, 5,  "Bank hardware :  %02d", cpld(twilighte) );
-    my_tzprintfpos( ptz, 2, 6,  "Bank software :  %02d", (bank > 32 ? bank - 32 : bank) );
-    my_tzprintfpos( ptz, 2, 7,  "Bank type     : %s"  , ((bank == 0) ? "Overlay" : ((bank > 32) ? "SRAM" : "EEPROM")) );
+
 
     // Trait de séparation en ligne 8
     ptz->px = 0;
@@ -1839,68 +1846,7 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
     my_tzputc( ptz, 8 );
 
     my_tzprintfpos( ptz, 2, 9 , "Twil register : $%02X", twilighte->t_register );
-    my_tzprintfpos( ptz, 2, 10, "Bank register : $%02X", twilighte->t_banking_register );
 
-    my_tzprintfpos( ptz, 2, 12, "IORB          : $%02X", twilighte->IORB );
-    my_tzprintfpos( ptz, 2, 13, "IORAh         : $%02X", twilighte->IORAh );
-    my_tzprintfpos( ptz, 2, 14, "DDRB          : $%02X", twilighte->DDRB );
-    my_tzprintfpos( ptz, 2, 15, "DDRA          : $%02X", twilighte->DDRA );
-
-
-    // Affiche sur fond rouge les valeurs différentes par rapport au précédent appel au moniteur.
-    if (oldvalid)
-    {
-        struct BOARD *twilighte_old = &userdata_old[instance];
-        int bank_old = logical_bank(twilighte_old);
-
-        // Board version
-        if ( (twilighte->t_register & 0x07) != (twilighte_old->t_register & 0x07) )
-            mon_periphmod( 19, 2, 2, ptz );
-
-
-        // Bank set
-        if (twilighte->t_banking_register != twilighte_old->t_banking_register)
-            mon_periphmod( 19, 4, 2, ptz );
-
-        // Bank hardware
-        if (cpld(twilighte) != cpld(twilighte_old))
-            mon_periphmod( 19, 5, 2, ptz );
-
-        // Bank software
-        if (bank != bank_old)
-            mon_periphmod( 19, 6, 2, ptz );
-
-        // Bank type
-        if ( ((bank == 0) ? 0 : ((bank > 32) ? 1 : 2)) != ((bank_old == 0) ? 0 : ((bank_old > 32) ? 1 : 2)) )
-            mon_periphmod( 18, 7, 7, ptz );
-
-
-        // Twil register
-        if (twilighte->t_register != twilighte_old->t_register)
-            mon_periphmod( 19, 9,  2, ptz );
-
-        // Bank register
-        if (twilighte->t_banking_register != twilighte_old->t_banking_register)
-            mon_periphmod( 19, 10, 2, ptz );
-
-
-        // IORB
-        if (twilighte->IORB != twilighte_old->IORB)
-            mon_periphmod( 19, 12, 2, ptz );
-
-        // IORah
-        if (twilighte->IORAh != twilighte_old->IORAh)
-            mon_periphmod( 19, 13, 2, ptz );
-
-        // DDRB
-        if (twilighte->DDRB != twilighte_old->DDRB)
-            mon_periphmod( 19, 14, 2, ptz );
-
-        // DDRA
-        if (twilighte->DDRA != twilighte_old->DDRA)
-            mon_periphmod( 19, 15, 2, ptz );
-    }
-    dbg_printf("TWILIGHTE: mon update]\n");
 */
 }
 
@@ -1917,8 +1863,6 @@ void mon_ch395_store(struct machine *oric, unsigned int instance)
 
     instance--;
 
-    // Copy data+ptr
-    //memcpy(&userdata_old[instance], &userdata[instance], sizeof(struct BOARD));
 }
 
 // -----------------------------------------------------------------------------
