@@ -62,9 +62,12 @@
 #include "msgbox.h"
 #include "keyboard.h"
 
-#include "plugins/ch376/ch376.h"
-#include "plugins/ch376/oric_ch376_plugin.h"
-#include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+// [Assinie--
+// #include "plugins/ch376/ch376.h"
+// #include "plugins/ch376/oric_ch376_plugin.h"
+// #include "plugins/twilighte_board/oric_twilighte_board_plugin.h"
+#include "plugins/assinie/periph.h"
+// --]
 
 extern SDL_bool fullscreen;
 
@@ -198,8 +201,8 @@ void inserttape( struct machine *oric, struct osdmenuitem *mitem, int dummy );
 void insertdisk( struct machine *oric, struct osdmenuitem *mitem, int drive );
 void resetoric( struct machine *oric, struct osdmenuitem *mitem, int dummy );
 void toggletapeturbo( struct machine *oric, struct osdmenuitem *mitem, int dummy );
-void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // [Assinie] - Tests
+// void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // void toggletwilighte(struct machine *oric, struct osdmenuitem *mitem, int dummy);
 // --]
 void toggleautowind( struct machine *oric, struct osdmenuitem *mitem, int dummy );
@@ -293,14 +296,14 @@ struct osdmenuitem hwopitems[] = { { " Oric-1",                "1",    SDLK_1,  
                                    { " VSync hack",            NULL,   0,        togglevsynchack, 0, 0 },
                                    { " Lightpen",              NULL,   0,        togglelightpen,  0, 0 },
                                    { " Serial none          ", NULL,   0,        toggleaciabackend, 0, 0 },
-                                   { " CH376 (Telestrat)    ", NULL,   0,        togglech376, 0, 0 },
 // [- Assinie
+//                                   { " CH376 (Telestrat)    ", NULL,   0,        togglech376, 0, 0 },
 //                                   { " Twilighte board    ", NULL,   0,        toggletwilighte, 0, 0 },
 // -]
 //                                   { " Mouse",                 NULL,   0,        NULL,            0, 0 },
 // [- Assinie
                                    { OSDMENUBAR,               NULL,   0,        NULL,            0, 0 },
-                                   { "Others...",              "O",   'o',       gotomenu,        8, 0 },
+                                   { "Plugins...",              "O",   'o',       gotomenu,        8, 0 },
 // -]
                                    { OSDMENUBAR,               NULL,   0,        NULL,            0, 0 },
                                    { "Back",                   "\x17", SDLK_BACKSPACE,gotomenu,   0, 0 },
@@ -401,7 +404,7 @@ struct osdmenu menus[] = { { "Main Menu",        LAST_ITEM(mainitems)-4, mainite
                            { "Overclock",        LAST_ITEM(ovopitems),  ovopitems },
                            { "Keyboard options", LAST_ITEM(keopitems),  keopitems },
                            // [- Assinie
-                           { "Others",          0,                     NULL}
+                           { "Plugins",          0,                     NULL}
                            // -]
                            };
 
@@ -1413,6 +1416,11 @@ void resetoric( struct machine *oric, struct osdmenuitem *mitem, int dummy )
       oric->romdis = SDL_FALSE;
       break;
   }
+
+  // [- Assinie
+  periph_reset_all(oric);
+  // -]
+
   setromon( oric );
   m6502_reset( &oric->cpu );
   via_init( &oric->via, oric, VIA_MAIN );
@@ -1557,11 +1565,11 @@ void toggleaciabackend( struct machine *oric, struct osdmenuitem *mitem, int dum
 }
 
 // Toggle ch376 on/off
+// [Assinie] - Tests
+// [--
+/*
 void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 {
-    // [Assinie] - Tests
-    // [--
-/*
 
 	if (oric->ch376_activated)
 	{
@@ -1575,9 +1583,9 @@ void togglech376(struct machine *oric, struct osdmenuitem *mitem, int dummy)
 	oric->ch376 = ch376_oric_init();
 	if (oric->ch376 != NULL)
 		ch376_oric_config(oric->ch376);
-*/
-    // -]
 }
+*/
+// -]
 
 // [Assinie] - Tests
 /*

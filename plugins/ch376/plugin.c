@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-//
+// PLugin CH376
 // -----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,6 +29,7 @@
 #include "ch376.h"
 #include "plugin_ch376.h"
 
+// #define DEBUG_PLUGIN
 #ifdef DEBUG_PLUGIN
     // dbg_printf est une fonction déclarée dans monitor.h mais est spécifique au moniteur
     // #define dbg_printf(x...) { printf(x); }
@@ -130,9 +131,9 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
+SDL_bool plugin_reset(struct expansion_bus *oric_bus, unsigned int instance)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
 
     dbg_printf("CH376 reset(%d)\n", instance);
 
@@ -151,9 +152,9 @@ SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 plugin_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
     fBank = fBank; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )
@@ -186,9 +187,9 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool plugin_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
     fBank = fBank; // gcc [-Wunused-parameter]
 
     if ( (!instance) || (instance > plugin_instances) )

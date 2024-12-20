@@ -1,5 +1,7 @@
+// vim: tabstop=4 expandtab
+
 // -----------------------------------------------------------------------------
-//
+// PLugin DEBUG
 // -----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdio.h>
@@ -43,36 +45,28 @@
 // extern struct osdmenu menus[];
 // Si Oricutron est compilé sans l'option -rdynamic alors il faut passer la
 // référence des fonctions tzprintfpos et tzpoutc au plugin.
-#ifndef NORDYNAMIC
+#ifndef RDYNAMIC
 void (*my_tzprintfpos)( struct textzone *ptz, int x, int y, char *fmt, ... );
 void (*my_tzputc)( struct textzone *ptz, char c );
 void (*mon_periphmod)( int x, int y, int w, struct textzone *vtz );
 #endif
 
 // *****************************************************************************
-//                    Extension Registre avec auto-incrément
+//                                  Datas
 // *****************************************************************************
-// Registre 16 bits avec post incrément
-// 0000-0001: registre
-// 0003     : incrément (signé)
+//
 // -----------------------------------------------------------------------------
-#define BASE_ADDR 0x350
-#define END_ADDR 0x352
+#define BASE_ADDR 0x331
+#define END_ADDR 0x331
 
-#define INSTANCE_MAX 2
+#define INSTANCE_MAX 1
 
-struct REG {
-  Uint16 data;
-  char incr;
-  Uint16 old_data;
-  char old_incr;
-};
+Uint8 userdata[INSTANCE_MAX];
+Uint8 userdata_old[INSTANCE_MAX];
 
-struct REG register_data[INSTANCE_MAX];
+unsigned int plugin_instances = 0;
 
-unsigned int register_instances = 0;
-
-static char *description = "Hardware register";
+static char *description = "Debug";
 
 // -----------------------------------------------------------------------------
 //                              plugin_init
@@ -94,14 +88,14 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 //                              plugin_create
 // -----------------------------------------------------------------------------
 // Called to create a new instance of the extension
-unsigned int register_create(struct machine *oric)
+unsigned int debug_create(struct machine *oric)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
-   if (register_instances >= INSTANCE_MAX)
+    if (plugin_instances >= INSTANCE_MAX)
         return 0;
 
-    return ++register_instances;
+    return ++plugin_instances;
 }
 
 // -----------------------------------------------------------------------------
@@ -114,161 +108,157 @@ unsigned int register_create(struct machine *oric)
 //                                  plugin_reset
 // -----------------------------------------------------------------------------
 // Called by init_machine and [F4]
-SDL_bool register_reset(struct expansion_bus *oric_bus, unsigned int instance )
+SDL_bool debug_reset(struct expansion_bus *oric_bus, unsigned int instance)
 {
     oric_bus = oric_bus; // gcc [-Wunused-parameter]
 
-    if ( (!instance) || (instance > register_instances) )
+    dbg_printf("stack_reset(%d)\n", instance);
+
+    if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
     instance--;
 
-    register_data[instance].incr = 0;
-    register_data[instance].data = 0;
+    userdata[instance] = 0;
+    userdata_old[instance] = 0;
 
     return SDL_TRUE;
 }
 
 // -------------------------------------------------------------------------
-//                          Lecture du registre
+//                          Lecture du registre par le 6502
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
-//
-Uint8 register_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+// Read access
+unsigned char debug_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, unsigned short addr, SDL_bool run)
 {
     oric_bus = oric_bus; // gcc [-Wunused-parameter]
     fBank = fBank; // gcc [-Wunused-parameter]
+    addr = addr; // gcc [-Wunused-parameter]
+    run = run; // gcc [-Wunused-parameter]
 
-    // On incrémente après la lecture du MSB
-    //
-    // ATTENTION:
-    //     - DEEK lit d'abord le MSB puis le LSB
-    //     - Oricutron lit d'abord le MSB puis le LSB pour un adressage indirect
-    //       contrairement à ce que fait le 6502
-
-    if ( (!instance) || (instance > register_instances) )
-        return (Uint8) 0;
+    if ( (!instance) || (instance > plugin_instances) )
+        return (unsigned char) 0;
 
     instance--;
 
-    switch (addr & 0x0003)
-    {
-        case 0:
-            return register_data[instance].data & 0x00ff;
-
-        case 1:
-        {
-            Uint8 data = register_data[instance].data >> 8;
-            if (run)
-                register_data[instance].data += (int)register_data[instance].incr;
-            return data;
-        }
-        case 2:
-            return register_data[instance].incr;
-
-        default:
-            dbg_printf("register_READ: bad address $%04x\n", addr);
-            return (Uint8) 0;
-    }
+    return userdata[instance];
 }
 
 // -------------------------------------------------------------------------
-//                      Ecriture dans le registre
+//                      Ecriture dans le registre par le 6502
 // -------------------------------------------------------------------------
 // run: FALSE -> exécution depuis le moniteur
-//
-SDL_bool register_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+// Write access
+SDL_bool debug_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, unsigned short addr, unsigned char data)
 {
     oric_bus = oric_bus; // gcc [-Wunused-parameter]
-    fBank = fBank; // gcc [-Wunused-parameter]
+    fBank = fBank;  // gcc [-Wunused-parameter]
+    addr = addr; // gcc [-Wunused-parameter]
 
-    // ATTENTION:
-    //     - DOKE écrit d'abord le MSB puis le LSB
-    //     - Oricutron lit d'abord le MSB puis le LSB pour un adressage indirect
-    //       contrairement à ce que fait le 6502
-
-     if ( (!instance) || (instance > register_instances) )
+    if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
     instance--;
 
-   switch (addr & 0x0003)
-    {
-        case 0:
-            register_data[instance].data = (register_data[instance].data & 0xff00) | data;
-            return SDL_TRUE;
+    userdata[instance] = data;
 
-        case 1:
-            register_data[instance].data = (register_data[instance].data & 0x00ff) | (data << 8);
-            return SDL_TRUE;
+    return SDL_TRUE;
+}
 
-        case 2:
-            register_data[instance].incr = data;
-            return SDL_TRUE;
+// -------------------------------------------------------------------------
+//                              Horloge
+// -------------------------------------------------------------------------
+// Called
+void debug_ticktock(struct expansion_bus *oric_bus, unsigned int instance, int cycles)
+{
+    if ( (!instance) || (instance > plugin_instances) )
+        return;
 
-        default:
-            dbg_printf("register_READ: address address $%04x\n", addr);
-            return SDL_FALSE;
-    }
+    instance--;
+
+    if ( !cycles )
+        return;
+
+    if (userdata[instance])
+        fprintf(stderr, "PC=%04X, A=%02X, X=%02X, Y=%02X, P=%c%c-%c%c%c%c%c, SP=1%02X, CALCOP=%02X LPC=%04X, CALCPC=%04X, BADDR=%04X, IRQ=%02X, ROMDIS=%02X\n",
+                    oric_bus->cpu->pc,
+                    oric_bus->cpu->a,
+                    oric_bus->cpu->x,
+                    oric_bus->cpu->y,
+
+                    oric_bus->cpu->f_n ? 'N' : '-',
+                    oric_bus->cpu->f_v ? 'V' : '-',
+                    oric_bus->cpu->f_b ? 'B' : '-',
+                    oric_bus->cpu->f_d ? 'D' : '-',
+                    oric_bus->cpu->f_i ? 'I' : '-',
+                    oric_bus->cpu->f_z ? 'Z' : '-',
+                    oric_bus->cpu->f_c ? 'C' : '-',
+
+                    oric_bus->cpu->sp,
+                    oric_bus->cpu->calcop,
+                    oric_bus->cpu->lastpc,
+                    oric_bus->cpu->calcpc,
+                    oric_bus->cpu->baddr,
+                    *oric_bus->irq,
+                    *oric_bus->romdis
+                    );
+
 }
 
 // -------------------------------------------------------------------------
 //                  Mise à jour de la page du moniteur
 // -------------------------------------------------------------------------
-void mon_register_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
+// Monitor page
+// Rows: 19 (1-19)
+// Columns: 28 (1-28)
+void mon_debug_update(struct textzone *tz, unsigned int instance, unsigned short base_addr, SDL_bool oldvalid)
 {
-     if ( (!instance) || (instance > register_instances) )
+    if ( (!instance) || (instance > plugin_instances) )
         return;
 
     instance--;
 
-    dbg_printf("REG: mon update\n");
-
-    my_tzprintfpos( tz, 2, 2,  "Base address  : $%04X", base_addr);
-    my_tzprintfpos( tz, 2, 3,  "Register value: $%04X", register_data[instance].data);
-    my_tzprintfpos( tz, 2, 4,  "Register incr.:   $%02X", (Uint8) register_data[instance].incr);
-
+    my_tzprintfpos( tz, 2, 2,  "Base address : $%04X", base_addr);
+    my_tzprintfpos( tz, 2, 3,  "Active flag  : $%02X", userdata[instance]);
 
     if (oldvalid)
     {
-        if (register_data[instance].data != register_data[instance].old_data)
-            mon_periphmod( 18, 3, 5, tz );
-
-        if (register_data[instance].incr != register_data[instance].old_incr)
-            mon_periphmod( 20, 4, 3, tz );
+        if (userdata[instance] != userdata_old[instance])
+            mon_periphmod( 18, 3, 2, tz );
     }
 }
 
 // -------------------------------------------------------------------------
 //                      Sauvegarde de l'état
 // -------------------------------------------------------------------------
-void mon_register_store(struct machine *oric, unsigned int instance)
+// Called by monitor
+void mon_debug_store(struct machine *oric, unsigned int instance)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
-    if ( (!instance) || (instance > register_instances) )
+    if ( (!instance) || (instance > plugin_instances) )
         return;
 
     instance--;
 
-    register_data[instance].old_data = register_data[instance].data;
-    register_data[instance].old_incr = register_data[instance].incr;
+    userdata_old[instance] = userdata[instance];
 }
 
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-struct PLUGIN plugin = { "REGISTER",
+struct PLUGIN plugin = { "DEBUG",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 PLG_DEVICE,
                 NULL,
-                register_create,
+                debug_create,
                 NULL,
-                register_reset,
-                register_read,
-                register_write,
-		NULL,
-                mon_register_update,
-                mon_register_store,
+                debug_reset,
+                debug_read,
+                debug_write,
+                debug_ticktock,
+                mon_debug_update,
+                mon_debug_store,
     };
 

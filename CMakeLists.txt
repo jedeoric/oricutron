@@ -117,7 +117,6 @@ SET (SRCS
   6502.c
   8912.c
   avi.c
-  plugins/ch376/ch376.c
   disk.c
   disk_pravetz.c
   font.c
@@ -126,8 +125,6 @@ SET (SRCS
   machine.c
   main.c
   monitor.c
-  plugins/ch376/oric_ch376_plugin.c
-  plugins/twilighte_board/oric_twilighte_board_plugin.c
   snapshot.c
   system_sdl.c
   tape.c
