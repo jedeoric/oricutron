@@ -2123,6 +2123,16 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
   if (oric->lightpen)
     oric->cpu.read  = lightpen_read;
 
+  // [Assinie--
+  // Ici la config a été lue donc on sait si ch376 est activé ou non
+  periph_test(oric);
+  periph_list();
+  // -]
+  periph_reset_all(oric);
+  error_printf("init_machine: apres periph_reset, romdis=%d", oric->romdis);
+  error_printf("init_machine: apres periph_reset, printenable=%d", oric->printenable);
+  // -]
+
   setromon( oric );
   oric->tapename[0] = 0;
   tape_rewind( oric );
@@ -2143,16 +2153,6 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
 
   // if (oric->twilighte==NULL) oric->twilighteboard_activated=SDL_FALSE;
   // --]
-
-  // [Assinie--
-  // Ici la config a été lue donc on sait si ch376 est activé ou non
-  periph_test(oric);
-  periph_list();
-  // -]
-  periph_reset_all(oric);
-  error_printf("Apres periph_reset, romdis=%d", oric->romdis);
-  // -]
-
 
   m6502_reset( &oric->cpu );
   via_init( &oric->via, oric, VIA_MAIN );
@@ -2354,6 +2354,11 @@ SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
             oric->pravetz.extension = 0;
             oric->romdis = !oric->pravetz.romdis;
           }
+
+          // [- Assinie
+          periph_reset_all(oric);
+          // -]
+
           setromon( oric );
           m6502_reset( &oric->cpu );
           via_init( &oric->via, oric, VIA_MAIN );
@@ -2394,9 +2399,6 @@ SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           }
 */
     // -]
-          // [- Assinie
-          periph_reset_all(oric);
-          // -]
           break;
 
         case SDLK_F5:

@@ -2,7 +2,7 @@ TOPTARGETS := all clean
 
 # SUBDIRS := $(wildcard */.)
 # SUBDIRS := twilighte
-SUBDIRS := ch376 debug ds1501 register skel stack twilighte
+SUBDIRS := ch376 debug ds1501 register skel stack twilighte skel_bank skel_romdis skel_clock
 
 $(TOPTARGETS): $(SUBDIRS)
 

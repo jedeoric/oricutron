@@ -174,7 +174,7 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
     // -----------------------------------------------------------------------------
     //
     // -----------------------------------------------------------------------------
-unsigned int plugin_create(struct machine *oric)
+unsigned int ds1501_create(struct machine *oric)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
@@ -279,7 +279,7 @@ unsigned int plugin_create(struct machine *oric)
     // -----------------------------------------------------------------------------
     //
     // -----------------------------------------------------------------------------
-SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
+SDL_bool ds1501_shutdown(struct machine *oric, unsigned int instance)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
@@ -295,9 +295,9 @@ SDL_bool plugin_shutdown(struct machine *oric, unsigned int instance)
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
-SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
+SDL_bool ds1501_reset(struct expansion_bus *oric_bus, unsigned int instance)
 {
-    oric = oric; // gcc [-Wunused-parameter]
+    oric_bus = oric_bus; // gcc [-Wunused-parameter]
 
     dbg_printf("stack_reset(%d)\n", instance);
 
@@ -314,7 +314,7 @@ SDL_bool plugin_reset(struct expansion_bus *oric, unsigned int instance)
     // -------------------------------------------------------------------------
     // run: FALSE -> exécution depuis le moniteur
     //
-Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 ds1501_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
 
@@ -403,7 +403,7 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
             if (run)
             {
                 userdata[instance]->control_a &= ~(TDF_mask|KSF_mask|WDF_mask|IRQF_mask);
-                oric->cpu.irq &= ~IRQF_DS1501;
+                *oric_bus->irq &= ~IRQF_DS1501;
             }
             return data;
         }
@@ -434,7 +434,19 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
             break;
 
         // Reserved
-        case 0x14 ... 0x1f:
+        // case 0x14 ... 0x1f:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1a:
+        case 0x1b:
+        case 0x1c:
+        case 0x1d:
+        case 0x1e:
+        case 0x1f:
             return (Uint8) 0;
             break;
 
@@ -455,7 +467,7 @@ Uint8 plugin_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
     //        ou si il ne faut considérer que ceux qui ont été modifiés entre TE=0
     //        et TE=1
 
-SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool ds1501_write(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
 
@@ -639,7 +651,7 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
                     if ( userdata[instance]->control_b & KIE_mask)
                     {
                         userdata[instance]->control_a |= IRQF_mask;
-                        oric->cpu.irq |= IRQF_DS1501;
+                        *oric_bus->irq |= IRQF_DS1501;
                     }
             }
             break;
@@ -671,7 +683,19 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
             break;
 
         // Reserved
-        case 0x14 ... 0x1f:
+        // case 0x14 ... 0x1f:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1a:
+        case 0x1b:
+        case 0x1c:
+        case 0x1d:
+        case 0x1e:
+        case 0x1f:
             break;
 
         default:
@@ -713,7 +737,7 @@ SDL_bool plugin_write(struct machine *oric, SDL_bool fBank, unsigned int instanc
     // -------------------------------------------------------------------------
     //                              Horloge
     // -------------------------------------------------------------------------
-void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
+void ds1501_ticktock(struct expansion_bus *oric_bus, unsigned int instance, int cycles)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return;
@@ -762,7 +786,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                         {
                             dbg_printf("DS1501: Watchdog reset system\n");
 
-                            // oric->cpu-reset = 1;
+                            // oric_bus->reset = SDL_TRUE;
 
                             // WDE est mis à 0 après après l'impulsion RST
                             userdata[instance]->control_b &= ~WDE_mask;
@@ -777,7 +801,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                             // IRQ levée en fin de fonction
                             // Tester un changement d'état de IRQF di on veut lever l'IRQ
                             //uniquement sur un changement d'état de IRQ 0->1
-                            oric->cpu.irq |= IRQF_DS1501;
+                            *oric_bus->irq |= IRQF_DS1501;
                         }
 
                         userdata[instance]->control_a |= IRQF_mask;
@@ -941,7 +965,8 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
                     // IRQ levée en fin de fonction?
                     // Tester un changement d'état de IRQF di on veut lever l'IRQ
                     //uniquement sur un changement d'état de IRQ 0->1
-                    oric->cpu.irq |= IRQF_DS1501;
+                    // oric_bus->cpu->irq |= IRQF_DS1501;
+                    *oric_bus->irq |= IRQF_DS1501;
                 }
 
                 if (userdata[instance]->control_b & TPE_mask)
@@ -957,7 +982,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
     // TODO: vérifier si une IRQ est levée uniquement si changement d'état de IRQF: 0->1
     //       ou tant que IRQF =1
     // if ( userdata[instance]->control_a & IRQF_mask)
-    //     oric->cpu.irq |= IRQF_DS1501;
+    //     *oric_bus->irq |= IRQF_DS1501;
 }
 
     // -------------------------------------------------------------------------
@@ -983,7 +1008,7 @@ void plugin_ticktock(struct machine *oric, unsigned int instance, int cycles)
     //         88 99 aa bb cc dd ee ff
     //         00 11 22 33 44 55 66 77
 
-void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
+void mon_ds1501_update(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     if ( (!instance) || (instance > plugin_instances) )
         return;
@@ -1231,7 +1256,7 @@ void mon_plugin_update(struct textzone *tz, unsigned int instance, Uint16 base_a
     // -------------------------------------------------------------------------
     //                      Sauvegarde de l'état
     // -------------------------------------------------------------------------
-void mon_plugin_store(struct machine *oric, unsigned int instance)
+void mon_ds1501_store(struct machine *oric, unsigned int instance)
 {
     oric = oric; // gcc [-Wunused-parameter]
 
@@ -1265,13 +1290,13 @@ struct PLUGIN plugin = { "DS1501",
                 BASE_ADDR, END_ADDR-BASE_ADDR+1,
                 PLG_DEVICE,
                 NULL,
-                plugin_create,
-                plugin_shutdown,
-                plugin_reset,
-                plugin_read,
-                plugin_write,
-                plugin_ticktock,
-                mon_plugin_update,
-                mon_plugin_store,
+                ds1501_create,
+                ds1501_shutdown,
+                ds1501_reset,
+                ds1501_read,
+                ds1501_write,
+                ds1501_ticktock,
+                mon_ds1501_update,
+                mon_ds1501_store,
     };
 

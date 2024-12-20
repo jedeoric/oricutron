@@ -39,6 +39,8 @@ Uint8 periph_read(struct machine *oric, Uint16 addr);
 
 SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data);
 
+SDL_bool device_printer(Uint8 data, SDL_bool rw);
+
 int periph_find_by_name(char *name);
 
 int periph_find_by_addr(struct machine *oric, Uint16 addr);

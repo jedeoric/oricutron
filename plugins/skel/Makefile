@@ -2,7 +2,7 @@ SDL_LIB ?= sdl
 INCLUDE_DIR = ../..
 
 CC=gcc
-CFLAGS=-fPIC -W -Wall -pedantic -I $(INCLUDE_DIR) $(shell PKG_CONFIG_PATH=/usr/lib64/pkgconfig pkg-config $(SDL_LIB) --cflags)
+CFLAGS=-g -fPIC -W -Wall -pedantic -I $(INCLUDE_DIR) $(shell PKG_CONFIG_PATH=/usr/lib64/pkgconfig pkg-config $(SDL_LIB) --cflags)
 LDFLAGS=-shared
 
 PLUGIN :=  lib$(notdir $(shell pwd)).so
