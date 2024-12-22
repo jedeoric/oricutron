@@ -143,6 +143,10 @@
 #define CH395_GINT_STAT_SOCK2               64
 #define CH395_GINT_STAT_SOCK3               128
 
+#define CH395_GINT_STAT_PHY_CHANGE          4
+#define CH395_GINT_STAT_IP_CONFLI           2
+#define CH395_GINT_STAT_UNREACH             1
+
 #define CH395_GINT_STAT_SOCK4               1
 #define CH395_GINT_STAT_SOCK5               2
 #define CH395_GINT_STAT_SOCK6               3
@@ -180,6 +184,8 @@ union CommandData
     uint8_t          CMD_SocketSetSrcPort[3];
     uint8_t          CMD_SocketState[1];
     uint8_t          CMD_SocketTTL[1];
+    uint8_t          CMD_SocketSetRecvBuf[3];
+    uint8_t          CMD_SocketSetSendBuf[3];
     uint8_t          CMD_SocketWriteBuffer[1];
     uint8_t          CMD_SocketGetRecvLen[1];
     uint8_t          CMD_SocketGetRecvBuf[4]; // Store socket, low length and high length : 4 to manage overflow
@@ -198,9 +204,22 @@ struct ch395
     union CommandData cmd_data;
     CH395_U8 nb_bytes_in_cmd_data;
     CH395_U16 pos_rw_in_cmd_data;
+
+    // Memory
     CH395_U8 buffer[24576];
+
+    // General commands
+    CH395_U8 cmd_status;
     CH395_U8 mac_address[6];
     CH395_U8 ip_chip[20];
+
+    // States
+    CH395_U8 glob_int_status;
+    CH395_U8 glob_int_status_all[2];
+    CH395_BOOL is_init; //
+    CH395_U8 phy_state;
+
+    // Socket commands
     CH395_U8 socket_proto[8]; // Store protocol
     CH395_U8 socket_status_sn[8][2];
     CH395_U8 socket_dest_port[8][2];
@@ -210,13 +229,13 @@ struct ch395
     CH395_U16 socket_length_received[8];
     CH395_U16 socket_length_to_send[8];
     CH395_U8 socket_int_status[8]; // Socket status
-    CH395_U8 glob_int_status;
-    CH395_BOOL is_init;
+
+
     CH395_U16 buffer_position_receive[8]; // Position receveive buffer for each socket
     CH395_U8 buffer_position_transmit[8]; // Position receveive buffer for each socket
     CH395_U16 buffer_position_write_from_data[8]; // ptr send data into buffer from cpu
     CH395_U16 buffer_position_read_from_data[8]; // ptr receive data into buffer from cpu
-    CH395_U8 phy_state;
+
 
     CH395_U8 receive_buffer_start_block[8];
     CH395_U8 receive_buffer_number_of_block[8];

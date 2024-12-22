@@ -119,10 +119,17 @@ unsigned int plugin_instances = 0;
 // Description du plugin
 static char *description = "CH395";
 
-void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
+
+void ch395_debug_concat(char *msg)
+{
+    printf("%s", msg);
+    dbg_printf("%s", msg);
+
+}
 
 
-
+int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
+{
     FILE *route_file, *resolv_file;
     char iface[IF_NAMESIZE];
     char line[256];
@@ -154,11 +161,11 @@ void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
                 gw_addr.s_addr = gateway;
 
                 unsigned char *ip_by_bytes = (unsigned char *)&gateway;
-
-                ch395->ip_chip[11] = ip_by_bytes[0];
-                ch395->ip_chip[10] = ip_by_bytes[1];
-                ch395->ip_chip[9] = ip_by_bytes[2];
-                ch395->ip_chip[8] = ip_by_bytes[3];
+                // Gateway
+                ch395->ip_chip[7] = ip_by_bytes[0];
+                ch395->ip_chip[6] = ip_by_bytes[1];
+                ch395->ip_chip[5] = ip_by_bytes[2];
+                ch395->ip_chip[4] = ip_by_bytes[3];
 
                 inet_ntop(AF_INET, &gw_addr, gateway_address, INET_ADDRSTRLEN);
                 printf("Passerelle : %s\n", gateway_address);
@@ -188,18 +195,18 @@ void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
                         printf("Masque de sous-réseau pour %s : %s\n", iface, subnet_mask);
 
                         unsigned char *ip_by_bytes = (unsigned char *)&netmask->sin_addr.s_addr;
-
-                        ch395->ip_chip[7] = ip_by_bytes[0];
-                        ch395->ip_chip[6] = ip_by_bytes[1];
-                        ch395->ip_chip[5] = ip_by_bytes[2];
-                        ch395->ip_chip[4] = ip_by_bytes[3];
+                        //store mask
+                        ch395->ip_chip[11] = ip_by_bytes[0];
+                        ch395->ip_chip[10] = ip_by_bytes[1];
+                        ch395->ip_chip[9] = ip_by_bytes[2];
+                        ch395->ip_chip[8] = ip_by_bytes[3];
 
                         struct sockaddr_in *addr_ip = (struct sockaddr_in *)ifa->ifa_addr;
 
                         if (inet_ntop(AF_INET, &addr_ip->sin_addr, ip_address, INET_ADDRSTRLEN) != NULL) {
                             printf("Adresse IP de l'interface %s : %s\n", iface, ip_address);
                             unsigned char *ip_by_bytes = (unsigned char *)&addr_ip->sin_addr.s_addr;
-
+                            // Store IP
                             ch395->ip_chip[3] = ip_by_bytes[0];
                             ch395->ip_chip[2] = ip_by_bytes[1];
                             ch395->ip_chip[1] = ip_by_bytes[2];
@@ -267,14 +274,14 @@ void ch395_fill_get_ip_inf_linux(struct ch395 *ch395) {
                 }
 
 
-                return EXIT_SUCCESS;
-            } 
+                return 0;
+            }
         }
     }
 
     fclose(route_file);
     printf("Aucune passerelle par défaut trouvée.\n");
-    return EXIT_FAILURE;
+    return 1;
 }
 
 int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
@@ -363,9 +370,16 @@ void ch395_init_internal(struct ch395 *ch395)
     ch395->transmit_buffer_start_block[2] = 32;
     ch395->transmit_buffer_start_block[3] = 44;
 
+    // For all socket
+    for(i=0; i<8; i++)
+    {
+        // Set socket
+        ch395->socket_ttl[i] = 0; // Set TTL : FIXME Check on real chip the value of TTL
+    }
+
 }
 
-//struct ch395 * ch395_create()
+
 int ch395_create(struct machine *oric)
 {
     int i;
@@ -417,28 +431,25 @@ unsigned char ch395_read_command_port(struct ch395 *ch395)
 unsigned char ch395_read_data_port(struct ch395 *ch395)
 {
     unsigned char data = 0xff;
-    char *msg;
+    char msg[500];
     char *value;
-    msg = malloc(200);
     value = malloc(200);
 
     switch(ch395->command)
     {
         case CH395_CMD_CHECK_EXIST:
             data = ch395->cmd_data.CMD_CheckByte;
-            dbg_printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x\n", ch395->cmd_data.CMD_CheckByte);
-            printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x\n", ch395->cmd_data.CMD_CheckByte);
+            dbg_printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x data = %d\n", ch395->cmd_data.CMD_CheckByte; data);
+            printf("[CH395][READ][DATA][CH395_CMD_CHECK_EXIST] setting data port to 0x%02x data = %d\n", ch395->cmd_data.CMD_CheckByte, data);
             return data;
 
          case CH395_CMD_GET_IC_VER:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_IC_VER]\n");
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_IC_VER]\n");
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_IC_VER]\n");
             data = 70; //VERSION
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
             // If ch395 is not init, PHY_state is always disconnected
             if (ch395->is_init == CH395_FALSE) {
                 printf("ch395 not init Cable disconnected\n");
@@ -457,8 +468,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_IP_INF:
-            printf(">>[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
-            dbg_printf("[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
+            ch395_debug_concat(">>[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
             if (ch395->pos_rw_in_cmd_data  == 20) {
                 printf("CH395 PANIC impossible to read more than 4 bytes \n");
                 dbg_printf("CH395 PANIC impossible to read more than 4 bytes \n");
@@ -471,8 +481,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_READ_RECV_BUF_SN:
-            printf("<<[CH395][READ][DATA][CH395_CMD_READ_RECV_BUF_SN] ");
-            dbg_printf("<<[CH395][READ][COMMAND][CH395_CMD_READ_RECV_BUF_SN] ");
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_READ_RECV_BUF_SN] ");
             int current_socket = ch395->cmd_data.CMD_SocketGetRecvBuf[0];
             int pos_buffer = ch395->pos_rw_in_cmd_data + ch395->transmit_buffer_start_block[current_socket] * CH395_SIZE_BLOCK_BUFFER;
             printf("POS buffer : %d ", pos_buffer);
@@ -509,8 +518,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
-            char *msg = "<<[CH395][READ][DATA][CH395_CMD_GET_RECV_LEN_SN]";
-            printf("%s", msg);
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_RECV_LEN_SN]");
+
             dbg_printf("%s", msg);
             if ( ch395->pos_rw_in_cmd_data == 0 )
             {
@@ -530,9 +539,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
 
         case CH395_CMD_GET_SOCKET_STATUS_SN:
-            char *msg_read_data_socket_status_sn = "<<[CH395][READ][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]";
-            printf("%s",msg_read_data_socket_status_sn);
-            dbg_printf("%s",msg_read_data_socket_status_sn);
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
 
             if ( ch395->pos_rw_in_cmd_data == 0 )
             {
@@ -733,214 +740,212 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
             break;
     }
     free(value);
-    free(msg);
     return data;
 }
 
 void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
 {
     // FIXME test nb_bytes_in_cmd_data in order to see if there is partial data sent into buffer
-
+    int val;
     ch395->nb_bytes_in_cmd_data = 0;
     ch395->pos_rw_in_cmd_data = 0;
     switch(command)
     {
         case CH395_CMD_GET_IC_VER:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_IC_VER]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_IC_VER]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_IC_VER]\n");
             break;
 
         case CH395_CMD_CHECK_EXIST:
             ch395->command = CH395_CMD_CHECK_EXIST;
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_CHECK_EXIST]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_CHECK_EXIST] waiting for check byte\n");
+            ch395_debug_concat("[CH395][WRITE][COMMAND][CH395_CMD_CHECK_EXIST] waiting for check byte\n");
             break;
 
         case CH395_CMD_SET_BAUDRATE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_BAUDRATE] not emulated\n");
+            ch395->command = CH395_CMD_SET_BAUDRATE;
             break;
 
         case CH395_CMD_ENTER_SLEEP:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_ENTER_SLEEP] not emulated\n");
+            ch395->command = CH395_CMD_ENTER_SLEEP;
             break;
 
         case CH395_CMD_RESET_ALL:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_RESET_ALL]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_RESET_ALL]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_RESET_ALL]\n");
             ch395->command = CH395_CMD_RESET_ALL;
             break;
 
         case CH395_CMD_SET_PHY:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_PHY] not emulated\n");
+            ch395->command = CH395_CMD_SET_PHY;
             break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS_ALL:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS_ALL]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS_ALL]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS_ALL]\n");
             ch395->command = CH395_CMD_GET_GLOB_INT_STATUS_ALL;
             break;
 
         case CH395_CMD_SET_MAC_ADDR:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_MAC_ADDR] not emulated\n");
+            ch395->command = CH395_CMD_SET_MAC_ADDR;
             break;
 
         case CH395_CMD_SET_IP_ADDR:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_IP_ADDR] not emulated\n");
+            ch395->command = CH395_CMD_SET_IP_ADDR;
             break;
+
         case CH395_CMD_SET_GWIP_ADDR:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_GWIP_ADDR] not emulated\n");
+            ch395->command = CH395_CMD_SET_GWIP_ADDR;
             break;
-        case CH395_CMD_SET_MASK_ADDR :
+
+        case CH395_CMD_SET_MASK_ADDR:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_MASK_ADDR] not emulated\n");
+            ch395->command = CH395_CMD_SET_MASK_ADDR;
             break;
+
         case CH395_CMD_SET_MAC_FILT:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_MAC_FILT] not emulated\n");
+            ch395->command = CH395_CMD_SET_MAC_FILT;
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
-
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_PHY_STATUS]\n");
             ch395->command = CH395_CMD_GET_PHY_STATUS;
             break;
 
         case CH395_CMD_INIT:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_INIT]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_INIT]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_INIT]\n");
             ch395->command = CH395_CMD_INIT;
             ch395->is_init = CH395_TRUE;
             break;
 
         case CH395_CMD_GET_UNREACH_IPPORT:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_UNREACH_IPPORT] Command not supported in current emulation\n");
+            break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_GLOB_INT_STATUS]\n");
             ch395->command = CH395_CMD_GET_GLOB_INT_STATUS;
             break;
 
         case CH395_CMD_SET_RETRAN_COUNT:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_RETRAN_COUNT] not emulated\n");
+            ch395->command = CH395_CMD_SET_RETRAN_COUNT;
             break;
 
         case CH395_CMD_SET_RETRAN_PERIOD:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_RETRAN_PERIOD] not emulated\n");
+            ch395->command = CH395_CMD_SET_RETRAN_PERIOD;
             break;
 
         case CH395_CMD_GET_CMD_STATUS:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_CMD_STATUS]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_CMD_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_CMD_STATUS]\n");
             ch395->command = CH395_CMD_GET_CMD_STATUS;
             break;
 
         case CH395_CMD_GET_REMOT_IPP_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_REMOT_IPP_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_REMOT_IPP_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_REMOT_IPP_SN]\n");
             ch395->command = CH395_CMD_GET_REMOT_IPP_SN;
             break;
 
         case CH395_CMD_CLEAR_RECV_BUF_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
             ch395->command = CH395_CMD_CLEAR_RECV_BUF_SN;
             break;
 
         case CH395_CMD_GET_SOCKET_STATUS_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_SOCKET_STATUS_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_SOCKET_STATUS_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_SOCKET_STATUS_SN]\n");
             ch395->command = CH395_CMD_GET_SOCKET_STATUS_SN;
             break;
 
         case CH395_CMD_GET_INT_STATUS_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_INT_STATUS_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_INT_STATUS_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_INT_STATUS_SN]\n");
             ch395->command = CH395_CMD_GET_INT_STATUS_SN;
             break;
 
         case CH395_CMD_SET_IP_ADDR_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_IP_ADDR_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_IP_ADDR_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_IP_ADDR_SN]\n");
             ch395->command = CH395_CMD_SET_IP_ADDR_SN;
             break;
 
         case CH395_CMD_SET_DES_PORT_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_DES_PORT_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_DES_PORT_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_DES_PORT_SN]\n");
             ch395->command = CH395_CMD_SET_DES_PORT_SN;
             break;
 
         case CH395_CMD_SET_SOUR_PORT_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_SOUR_PORT_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_SOUR_PORT_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_SOUR_PORT_SN]\n");
             ch395->command = CH395_CMD_SET_SOUR_PORT_SN;
             break;
 
         case CH395_CMD_SET_PROTO_TYPE_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_PROTO_TYPE_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_PROTO_TYPE_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_PROTO_TYPE_SN]\n");
             ch395->command = CH395_CMD_SET_PROTO_TYPE_SN;
             break;
 
         case CH395_CMD_OPEN_SOCKET_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_OPEN_SOCKET_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_OPEN_SOCKET_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_OPEN_SOCKET_SN]\n");
             ch395->command = CH395_CMD_OPEN_SOCKET_SN;
             break;
 
         case CH395_CMD_TCP_LISTEN_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_LISTEN_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_TCP_LISTEN_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_LISTEN_SN]\n");
             ch395->command = CH395_CMD_TCP_LISTEN_SN;
             break;
 
         case CH395_CMD_TCP_CONNECT_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_CONNECT_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_TCP_CONNECT_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_CONNECT_SN]\n");
             ch395->command = CH395_CMD_TCP_CONNECT_SN;
             break;
 
         case CH395_CMD_TCP_DISNCONNECT_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_DISNCONNECT_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_TCP_DISNCONNECT_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_TCP_DISNCONNECT_SN]\n");
             ch395->command = CH395_CMD_TCP_DISNCONNECT_SN;
             break;
 
         case CH395_CMD_WRITE_SEND_BUF_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_WRITE_SEND_BUF_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_WRITE_SEND_BUF_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_WRITE_SEND_BUF_SN]\n");
             ch395->command = CH395_CMD_WRITE_SEND_BUF_SN;
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_RECV_LEN_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_RECV_LEN_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_RECV_LEN_SN]\n");
             ch395->command = CH395_CMD_GET_RECV_LEN_SN;
             break;
 
         case CH395_CMD_READ_RECV_BUF_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_READ_RECV_BUF_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_READ_RECV_BUF_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_READ_RECV_BUF_SN]\n");
             ch395->command = CH395_CMD_READ_RECV_BUF_SN;
             break;
 
         case CH395_CMD_CLOSE_SOCKET_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_CLOSE_SOCKET_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_CLOSE_SOCKET_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_CLOSE_SOCKET_SN]\n");
             ch395->command = CH395_CMD_CLOSE_SOCKET_SN;
             break;
 
         case CH395_CMD_SET_IPRAW_PRO_SN:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_IPRAW_PRO_SN]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_IPRAW_PRO_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_IPRAW_PRO_SN]\n");
             ch395->command = CH395_CMD_SET_IPRAW_PRO_SN;
             break;
 
         case CH395_CMD_PING_ENABLE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_PING_ENABLE]\n");
+            ch395->command = CH395_CMD_PING_ENABLE;
             break;
 
         case CH395_CMD_GET_MAC_ADDR:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_MAC_ADDR]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_MAC_ADDR]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_MAC_ADDR]\n");
             ch395->command = CH395_CMD_GET_MAC_ADDR;
             break;
 
         case CH395_CMD_DHCP_ENABLE:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_DHCP_ENABLE]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_DHCP_ENABLE]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_DHCP_ENABLE]\n");
             ch395->command = CH395_CMD_DHCP_ENABLE;
 
-            ch395_fill_get_ip_inf_linux(ch395);
-
+            val = ch395_fill_get_ip_inf_linux(ch395);
+            if (val == 0 ) ch395->cmd_status = ch395->cmd_status | CH395_ERR_SUCCESS;
 
             // Let's get IP and so on
             break;
@@ -958,52 +963,96 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_PPPOE_SET_USER_NAME:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_PPPOE_SET_USER_NAME]\n");
+            ch395->command = CH395_CMD_PPPOE_SET_USER_NAME;
             break;
 
         case CH395_CMD_PPPOE_SET_PASSWORD:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_PPPOE_SET_PASSWORD]\n");
+            ch395->command = CH395_CMD_PPPOE_SET_PASSWORD;
             break;
+
         case CH395_CMD_PPPOE_ENABLE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_PPPOE_ENABLE]\n");
+            ch395->command = CH395_CMD_PPPOE_ENABLE;
             break;
+
         case CH395_CMD_GET_PPPOE_STATUS:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_PPPOE_STATUS]\n");
+            ch395->command = CH395_CMD_GET_PPPOE_STATUS;
             break;
+
         case CH395_CMD_SET_TCP_MSS:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_TCP_MSS]\n");
+            ch395->command = CH395_CMD_SET_TCP_MSS;
             break;
 
         case CH395_CMD_SET_TTL:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_TTL]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_TTL]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_TTL]\n");
             ch395->command = CH395_CMD_SET_TTL;
             break;
 
         case CH395_CMD_SET_RECV_BUF:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_RECV_BUF]\n");
+            ch395->command = CH395_CMD_SET_RECV_BUF;
             break;
+
         case CH395_CMD_SET_SEND_BUF:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_SEND_BUF]\n");
+            ch395->command = CH395_CMD_SET_SEND_BUF;
             break;
+
         case CH395_CMD_SET_FUN_PARA:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA] not emulated\n");
             ch395->command = CH395_CMD_SET_FUN_PARA;
             break;
+ 
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_IDLE] Not emulated\n");
+            ch395->command = CH395_CMD_SET_KEEP_LIVE_IDLE;
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_INTVL] Not emulated\n");
+            ch395->command = CH395_CMD_SET_KEEP_LIVE_INTVL;
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_CNT:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_CNT] Not emulated\n");
+            ch395->command = CH395_CMD_SET_KEEP_LIVE_CNT;
             break;
         case CH395_CMD_SET_KEEP_LIVE_SN:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_SN] Not emulated\n");
+            ch395->command = CH395_CMD_SET_KEEP_LIVE_SN;
             break;
+
         case CH395_CMD_EEPROM_ERASE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_EEPROM_ERASE] Not emulated\n");
+            ch395->command = CH395_CMD_EEPROM_ERASE;
             break;
+
         case CH395_CMD_EEPROM_WRITE:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_EEPROM_WRITE] Not emulated\n");
+            ch395->command = CH395_CMD_EEPROM_WRITE;
             break;
+
         case CH395_CMD_EEPROM_READ:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_EEPROM_READ] Not emulated\n");
+            ch395->command = CH395_CMD_EEPROM_READ;
             break;
+
         case CH395_CMD_READ_GPIO_REG:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_READ_GPIO_REG] Not emulated\n");
+            ch395->command = CH395_CMD_READ_GPIO_REG;
             break;
+
         case CH395_CMD_WRITE_GPIO_REG:
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_WRITE_GPIO_REG] Not emulated\n");
+            ch395->command = CH395_CMD_WRITE_GPIO_REG;
             break;
+
         default:
-            printf(">>[CH395][UNKNOWN]\n");
+            printf(">>[CH395][UNKNOWN_COMMAND]\n");
             break;
 
     }
@@ -1098,28 +1147,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
             break;
         case CH395_CMD_GET_SOCKET_STATUS_SN:
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
 
-//    ;;@explain 00H SOCKET_CLOSED
-//     ;;@explain 05H SOCKET_OPEN
-//     ;;@explain The second status code is TCP status code, which is only meaningful when TCP mode has been on. TCP
-//     ;;@explain status code is defined as follows:
-//     ;;@explain Code Name Description
-//     ;;@explain 00H TCP_CLOSED Closed
-//     ;;@explain 01H TCP_LISTEN Monitoring
-//     ;;@explain 02H TCP_SYN_SENT SYN sent
-//     ;;@explain 03H TCP_SYN_RCVD SYN received
-//     ;;@explain 04H TCP_ESTABLISHED TCP connection established
-//     ;;@explain 05H TCP_FIN_WAIT_1 The active closing side first sends FIN
-//     ;;@explain 06H TCP_FIN_WAIT_2 The active closing side receives an ACK from FIN
-//     ;;@explain 07H TCP_CLOSE_WAIT The passive closing side receives FIN
-//     ;;@explain 08H TCP_CLOSING Closing
-//     ;;@explain 09H TCP_LAST_ACK The passive closing side sends FIN
-//     ;;@explain 0AH TCP_TIME_WAIT 2MLS waiting status
-//     ;;@explain TCP status is defined in TCP/IP protocol. Please refer to TCP/IP protocol for the detailed meaning
-//     ;;@inputA Socket id
-
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
@@ -1139,8 +1168,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data == 1)
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN][ERROR] Accept only one byte (data already sent)\n");
-                dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN] Accept only one byte  (data already sent)\n");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN][ERROR] Accept only one byte (data already sent)\n");
                 break;
             }
             printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN] Socket : %d\n", data);
@@ -1152,8 +1180,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_SET_IP_ADDR_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_IP_ADDR_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_IP_ADDR_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_IP_ADDR_SN]");
+
 
             if (ch395->nb_bytes_in_cmd_data > 5)
             {
@@ -1451,6 +1479,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
+
             printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
             dbg_printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
 
@@ -1495,20 +1524,21 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             printf(">>[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             close(ch395->sockfd_host[data]);
+
             break;
 
         case CH395_CMD_SET_IPRAW_PRO_SN:
-            char *msg = ">>[CH395][WRITE][DATA][CH395_CMD_SET_IPRAW_PRO_SN] Socket";
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_IPRAW_PRO_SN]");
 
             if  (ch395->pos_rw_in_cmd_data == 0) {
-                printf("%s %d\n",msg, data);
-                dbg_printf("%s %d\n",msg, data);
+                printf("socket %d\n", data);
+                dbg_printf("socket %d\n", data);
                 ch395->pos_rw_in_cmd_data ++;
             }
             else {
                 char *msg_panic = "PANIC : CH395_CMD_SET_IPRAW_PRO_SN can not receive 2 bytes on data port";
-                printf("%s %d\n",msg, data);
-                dbg_printf("%s %d\n",msg, data);
+                printf("socket %d\n", data);
+                dbg_printf("socket %d\n",data);
             }
             break;
 
@@ -1519,18 +1549,15 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_DHCP_ENABLE:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_DHCP_ENABLE]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_DHCP_ENABLE]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_DHCP_ENABLE]\n");
             break;
 
         case CH395_CMD_GET_DHCP_STATUS:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_DHCP_STATUS]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_DHCP_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_DHCP_STATUS]\n");
             break;
 
         case CH395_CMD_GET_IP_INF:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF] CH395 PANIC impossible to write into DATA port with CH395_CMD_GET_IP_INF\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF] CH395 PANIC impossible to write into DATA port with CH395_CMD_GET_IP_INF\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_IP_INF] CH395 PANIC impossible to write into DATA port with CH395_CMD_GET_IP_INF\n");
             break;
 
         case CH395_CMD_PPPOE_SET_USER_NAME:
@@ -1552,38 +1579,118 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             switch(ch395->nb_bytes_in_cmd_data)
             {
-                char *msg = ">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]";
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]");
                 case 0:
 
                     ch395->cmd_data.CMD_SocketTTL[0] = data;
-                    printf("%s Setting socket : %d\n",msg, data);
-                    dbg_printf("%s %d\n",msg, data);
+                    printf("Setting socket : %d\n", data);
+                    dbg_printf("%d\n",data);
                     ch395->pos_rw_in_cmd_data ++;
                     break;
                 case 1:
                     if (data > 128)
                     {
-                        printf("%s PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",msg, data);
-                        dbg_printf("%s PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",msg, data);
+                        printf("PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n", data);
+                        dbg_printf("PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",data);
                     }
                     else
                     {
-                        printf("%s socket : %d TTL : \n",msg, ch395->cmd_data.CMD_SocketTTL[0], data);
+                        printf("socket : %d TTL : \n", ch395->cmd_data.CMD_SocketTTL[0], data);
                         ch395->socket_ttl[ch395->cmd_data.CMD_SocketTTL[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
                 default:
-                    printf("%s PANIC : CH395_CMD_SET_TTL can not receive 3 bytes on data port %d\n",msg, data);
-                    dbg_printf("%s PANIC : CH395_CMD_SET_TTL can not receive 3 bytes on data port %d\n",msg, data);
+                    printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n",data);
+                    dbg_printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n", data);
                     break;
 
             }
             break;
 
         case CH395_CMD_SET_RECV_BUF:
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_RECV_BUF]");
+            switch(ch395->nb_bytes_in_cmd_data)
+            {
+                case 0:
+                    ch395->cmd_data.CMD_SocketSetRecvBuf[0] = data;
+                    printf("Setting socket : %d\n", data);
+                    dbg_printf("%s %d\n", data);
+                    ch395->pos_rw_in_cmd_data ++;
+                    break;
+                case 1:
+                    if (data > 48)
+                    {
+                        printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a start value greater than 48, received : %d\n", data);
+                        dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a start value greater than 48, received : %d\n",data);
+                    }
+                    else
+                    {
+                        printf("socket : %d start_block : \n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
+                        ch395->receive_buffer_start_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
+                        ch395->pos_rw_in_cmd_data ++;
+                    }
+                case 3:
+                    if (data > 48)
+                    {
+                        printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a number block value greater than 48, received : %d\n", data);
+                        dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a number block value value greater than 48, received : %d\n",data);
+                    }
+                    else
+                    {
+                        printf("socket : %d number block : \n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
+                        ch395->receive_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
+                        ch395->pos_rw_in_cmd_data ++;
+                    }
+
+                default:
+                    printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n",data);
+                    dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n", data);
+                    break;
+
+            }
             break;
 
         case CH395_CMD_SET_SEND_BUF:
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_SEND_BUF]");
+            switch(ch395->nb_bytes_in_cmd_data)
+            {
+                case 0:
+                    ch395->cmd_data.CMD_SocketSetSendBuf[0] = data;
+                    printf("Setting socket : %d\n", data);
+                    dbg_printf("%s %d\n", data);
+                    ch395->pos_rw_in_cmd_data ++;
+                    break;
+                case 1:
+                    if (data > 48)
+                    {
+                        printf("PANIC : CH395_CMD_SET_SEND_BUF can not have a start value greater than 48, received : %d\n", data);
+                        dbg_printf("PANIC : CH395_CMD_SET_SEND_BUF can not have a start value greater than 48, received : %d\n",data);
+                    }
+                    else
+                    {
+                        printf("socket : %d start_block : \n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
+                        ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
+                        ch395->pos_rw_in_cmd_data ++;
+                    }
+                case 3:
+                    if (data > 48)
+                    {
+                        printf("PANIC : CH395_CMD_SET_SEND_BUF can not have a number block value greater than 48, received : %d\n", data);
+                        dbg_printf("PANIC : CH395_CMD_SET_SEND_BUF can not have a number block value value greater than 48, received : %d\n",data);
+                    }
+                    else
+                    {
+                        printf("socket : %d number block : \n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
+                        ch395->transmit_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
+                        ch395->pos_rw_in_cmd_data ++;
+                    }
+
+                default:
+                    printf("PANIC : CH395_CMD_SET_SEND_BUF can not receive 3 bytes on data port %d\n",data);
+                    dbg_printf("PANIC : CH395_CMD_SET_SEND_BUF can not receive 3 bytes on data port %d\n", data);
+                    break;
+
+            }
             break;
 
         case CH395_CMD_SET_FUN_PARA:
@@ -1629,9 +1736,9 @@ Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 
     instance--;
 
-    if (addr == 0x00) ch395_read_data_port(userdata[instance]);
-    if (addr == 0x01) ch395_read_command_port(userdata[instance]);
-    return (Uint8) 1;
+    if (addr == 0x00) return ch395_read_data_port(userdata[instance]);
+    if (addr == 0x01) return ch395_read_command_port(userdata[instance]);
+
 }
 
 SDL_bool ch395_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
@@ -1731,6 +1838,61 @@ SDL_bool ch395_reset(struct expansion_bus *oric, unsigned int instance)
 // Monitor page
 // Rows: 19 (1-19)
 // Columns: 28 (1-28)
+
+void mon_ch395_status(struct textzone *ptz, unsigned int instance, int pos_state, int y)
+{
+    int i;
+    i = y;
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK3)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket3 interrupt");
+        pos_state += strlen("Socket3 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK2)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket2 interrupt");
+        pos_state += strlen("Socket2 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK1)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket1 interrupt");
+        pos_state += strlen("Socket1 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK0)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket0 interrupt");
+        pos_state += strlen("Socket0 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_DHCP)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "DHCP interrupt");
+        pos_state += strlen("DHCP interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_PHY_CHANGE)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "PHY status change interrupt");
+        pos_state += strlen("PHY status change interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_IP_CONFLI)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "DHCP IP conflict");
+        pos_state += strlen("DHCP IP conflict");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_UNREACH)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "UNREACH");
+        pos_state += strlen("DHCP IP conflict");
+    }
+
+}
+
 void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid, SDL_bool run)
 {
     int i;
@@ -1740,12 +1902,16 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
         return;
 
     instance--;
+    if (oldvalid)
+    {
+        dbg_printf("oldvalid true");
+    }
 
     //ptz->cfc = 5;
     dbg_printf("ch395: mon update (instance=%d)\n", instance);
     //ch395->socket_status_sn[i][0]
     my_tzprintfpos( ptz, 2, 2,  "Initialized :  %02d", userdata[instance]->is_init);
-    my_tzprintfpos( ptz, 2, 3,  "S |  BUFBLOCK   | STATE |   FLAGS  | SN");
+    my_tzprintfpos( ptz, 2, 3,  "S |  BUFBLOCK   | STATE |   FLAGS  | TTL | SN");
     int pos_state = 4;
     for (i = 0; i < 8 ; i++)
     {
@@ -1792,7 +1958,9 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
 
 
         pos_state += 12;
+        my_tzprintfpos( ptz, pos_state, 4 + i,  "%d", userdata[instance]->socket_ttl[i]);
 
+        pos_state += 6;
         if (userdata[instance]->socket_int_status[i] & CH395_SINT_STAT_TIM_OUT)
         {
             my_tzprintfpos( ptz, pos_state, 4 + i,  "TIM_OUT");
@@ -1829,6 +1997,109 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
             pos_state += strlen("DISCONNECT");
         }
     }
+
+    // Displays cmd_status
+    pos_state = 1;
+    my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "CMD_STATUS : ");
+    pos_state += strlen("CMD_STATUS : ");
+    switch(userdata[instance]->cmd_status)
+    {
+
+        case CH395_ERR_SUCCESS:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "SUCCESS");
+            break;
+        case CH395_ERR_BUSY:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Busy, the command is being executed");
+            break;
+        case CH395_ERR_MEM:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Memory Management error");
+            break;
+        case CH395_ERR_BUF:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Buffer error");
+            break;
+        case CH395_ERR_TIMEOUT:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Timeout");
+            break;
+        case CH395_ERR_RTE:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Route error");
+            break;
+        case CH395_ERR_ABRT:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection suspended");
+            break;
+        case CH395_ERR_RST:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection reset");
+            break;
+        case CH395_ERR_CLSD:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection closed");
+            break;
+        case CH395_ERR_CONN:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "No connection");
+            break;
+        case CH395_ERR_VAL:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Value error");
+            break;
+        case CH395_ERR_ARG:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Parameter error");
+            break;
+        case CH395_ERR_USE:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Used");
+            break;
+        case CH395_ERR_IF:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "MAC error");
+            break;
+        case CH395_ERR_ISCONN:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connected");
+            break;
+        case CH395_ERR_OPEN:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Opened");
+            break;
+        default:
+            my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Status error (PANIC)");
+
+    }
+
+    pos_state = 1;
+    my_tzprintfpos( ptz, pos_state, 4 + i + 2,  "CMD_GLOB_INT_STATUS : ");
+    pos_state += strlen("CMD_GLOB_INT_STATUS : ");
+    mon_ch395_status(ptz,instance,pos_state,i);
+
+    pos_state = 1;
+    my_tzprintfpos( ptz, pos_state, 4 + i + 2,  "CMD_GLOB_INT_STATUS_ALL : ");
+    pos_state += strlen("CMD_GLOB_INT_STATUS_ALL : ");
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK7)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket7 interrupt");
+        pos_state += strlen("Socket7 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK2)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket6 interrupt");
+        pos_state += strlen("Socket6 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK5)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket5 interrupt");
+        pos_state += strlen("Socket5 interrupt");
+    }
+
+    if (userdata[instance]->glob_int_status&CH395_GINT_STAT_SOCK4)
+    {
+        my_tzprintfpos( ptz, pos_state, 4 + i + 2, "Socket4 interrupt");
+        pos_state += strlen("Socket4 interrupt");
+    }
+
+    mon_ch395_status(ptz,instance,pos_state,i);
+    pos_state = 1;
+    my_tzprintfpos( ptz, pos_state, 4 + i + 3, "IP : %d.%d.%d.%d",userdata[instance]->ip_chip[3],userdata[instance]->ip_chip[2],userdata[instance]->ip_chip[1],userdata[instance]->ip_chip[0]);
+    my_tzprintfpos( ptz, pos_state, 4 + i + 4, "Gateway : %d.%d.%d.%d",userdata[instance]->ip_chip[7],userdata[instance]->ip_chip[6],userdata[instance]->ip_chip[5],userdata[instance]->ip_chip[4]);
+    my_tzprintfpos( ptz, pos_state, 4 + i + 5, "Mask: %d.%d.%d,%d",userdata[instance]->ip_chip[11],userdata[instance]->ip_chip[10],userdata[instance]->ip_chip[9],userdata[instance]->ip_chip[8]);
+    my_tzprintfpos( ptz, pos_state, 4 + i + 6, "NS2 : %d.%d.%d.%d",userdata[instance]->ip_chip[15],userdata[instance]->ip_chip[14],userdata[instance]->ip_chip[13],userdata[instance]->ip_chip[12]);
+    my_tzprintfpos( ptz, pos_state, 4 + i + 7, "NS1 : %d.%d.%d.%d",userdata[instance]->ip_chip[19],userdata[instance]->ip_chip[18],userdata[instance]->ip_chip[17],userdata[instance]->ip_chip[16]);
+    //pos_state += strlen("Socket4 interrupt");
+
 
     // if (userdata[instance]->ch395->glob_int_status & )
  /*
