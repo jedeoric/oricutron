@@ -5,7 +5,7 @@
 #define CH395_CMD_SET_BAUDRATE            0x02
 #define CH395_CMD_ENTER_SLEEP             0x03
 #define CH395_CMD_RESET_ALL	              0x05 // 50ms
-#define CH395_CMD_CHECK_EXIST         0x06
+#define CH395_CMD_CHECK_EXIST             0x06
 #define CH395_CMD_SET_PHY                 0x20
 #define CH395_CMD_GET_GLOB_INT_STATUS_ALL 0x19
 #define CH395_CMD_SET_MAC_ADDR            0x21 // 6 ?

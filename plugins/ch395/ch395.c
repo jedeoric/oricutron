@@ -27,7 +27,7 @@ struct ch395 *userdata[INSTANCE_MAX];
 struct ch395 *userdata_old[INSTANCE_MAX];
 
 
-//Used for Linux 
+//Used for Linux
 #define ROUTE_PATH "/proc/net/route"
 #define RESOLV_PATH "/etc/resolv.conf"
 
@@ -116,9 +116,6 @@ extern struct Library *SysBase;
 // Nombre d'instances total
 unsigned int plugin_instances = 0;
 
-// Description du plugin
-static char *description = "CH395";
-
 
 void ch395_debug_concat(char *msg)
 {
@@ -126,7 +123,6 @@ void ch395_debug_concat(char *msg)
     dbg_printf("%s", msg);
 
 }
-
 
 int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
 {
@@ -185,10 +181,7 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
                     if (strcmp(ifa->ifa_name, iface) == 0) {
                         // Obtenir l'adresse IP en format lisible
 
-
                         struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
-
-
 
                         // Convertir le masque en format lisible
                         inet_ntop(AF_INET, &netmask->sin_addr, subnet_mask, INET_ADDRSTRLEN);
@@ -223,7 +216,7 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
                 // Lecture des serveurs DNS depuis /etc/resolv.conf
                 resolv_file = fopen(RESOLV_PATH, "r");
                 if (!resolv_file) {
-                    perror("Erreur lors de l'ouverture de /etc/resolv.conf");
+                    perror("fileopen error : /etc/resolv.conf");
                     return EXIT_FAILURE;
                 }
 
@@ -302,11 +295,11 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
     snprintf(ip, sizeof(ip), "%u.%u.%u.%u", ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
     printf("%s %u.%u.%u.%u\n",ip, ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
     if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
-        perror("Adresse IP invalide");
+        perror("invalid IP adress ");
         return 1;
     }
-    printf("Connexion vers : %s:%d\n",ip, port);
-    dbg_printf("Connexion vers : %s:%d\n",ip, port);
+    printf("Connection to : %s:%d\n",ip, port);
+    dbg_printf("Connection to : %s:%d\n",ip, port);
     //ch395->CommandData
     //server_addr.sin_addr.s_addr =*((unsigned long *)host->h_addr_list[0]);
 
@@ -422,13 +415,16 @@ int ch395_create(struct machine *oric)
 }
 
 
-unsigned char ch395_read_command_port(struct ch395 *ch395)
+unsigned char ch395_read_command_port(struct ch395 *ch395, SDL_bool run)
 {
-    printf(">>[CH395][READ][COMMAND] Can not read command port\n");
+    if (!run)
+        // Don't know if ch395 return command port
+        return 0;
+    ch395_debug_concat(">>[CH395][READ][COMMAND] Can not read command port\n");
     return 0;
 }
 
-unsigned char ch395_read_data_port(struct ch395 *ch395)
+unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
 {
     unsigned char data = 0xff;
     char msg[500];
@@ -494,9 +490,13 @@ unsigned char ch395_read_data_port(struct ch395 *ch395)
                 case 0x0a:
                     printf("data : \\n\n");
                     dbg_printf("data : \\n\n");
+                    break;
+
                 case 0x0d:
                     printf("data : \\r\n");
                     dbg_printf("data : \\r\n");
+                    break;
+
                 default:
                     printf("data : %c\n", data);
                     dbg_printf("data : %c\n", data);
@@ -846,12 +846,12 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_GET_REMOT_IPP_SN:
-            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_REMOT_IPP_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_REMOT_IPP_SN] not emulated\n");
             ch395->command = CH395_CMD_GET_REMOT_IPP_SN;
             break;
 
         case CH395_CMD_CLEAR_RECV_BUF_SN:
-            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_CLEAR_RECV_BUF_SN] not emulated\n");
             ch395->command = CH395_CMD_CLEAR_RECV_BUF_SN;
             break;
 
@@ -1479,9 +1479,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_RECV_LEN_SN:
-
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
-            dbg_printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
 
             ch395->cmd_data.CMD_SocketGetRecvLen[0] = data;
             printf("Socket : %d\n",data);
@@ -1490,8 +1488,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_READ_RECV_BUF_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_READ_RECV_BUF_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_READ_RECV_BUF_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_READ_RECV_BUF_SN]");
 
             switch(ch395->nb_bytes_in_cmd_data)
             {
@@ -1537,8 +1534,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             }
             else {
                 char *msg_panic = "PANIC : CH395_CMD_SET_IPRAW_PRO_SN can not receive 2 bytes on data port";
-                printf("socket %d\n", data);
-                dbg_printf("socket %d\n",data);
+                printf("%s socket %d\n", msg_panic, data);
+                dbg_printf("%s socket %d\n", msg_panic, data);
             }
             break;
 
@@ -1577,9 +1574,9 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
         case CH395_CMD_SET_TTL:
 
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]");
             switch(ch395->nb_bytes_in_cmd_data)
             {
-                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]");
                 case 0:
 
                     ch395->cmd_data.CMD_SocketTTL[0] = data;
@@ -1587,6 +1584,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     dbg_printf("%d\n",data);
                     ch395->pos_rw_in_cmd_data ++;
                     break;
+
                 case 1:
                     if (data > 128)
                     {
@@ -1599,6 +1597,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->socket_ttl[ch395->cmd_data.CMD_SocketTTL[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
+                    break;
+
                 default:
                     printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n",data);
                     dbg_printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n", data);
@@ -1629,6 +1629,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->receive_buffer_start_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
+                    break;
                 case 3:
                     if (data > 48)
                     {
@@ -1641,13 +1642,13 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->receive_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
+                    break;
 
                 default:
                     printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n",data);
                     dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n", data);
                     break;
-
-            }
+                }
             break;
 
         case CH395_CMD_SET_SEND_BUF:
@@ -1672,6 +1673,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
+                    break;
+
                 case 3:
                     if (data > 48)
                     {
@@ -1684,6 +1687,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->transmit_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
+                    break;
 
                 default:
                     printf("PANIC : CH395_CMD_SET_SEND_BUF can not receive 3 bytes on data port %d\n",data);
@@ -1700,28 +1704,35 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_INTVL:
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_CNT:
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_SN:
             break;
+
         case CH395_CMD_EEPROM_ERASE:
             break;
+
         case CH395_CMD_EEPROM_WRITE:
             break;
+
         case CH395_CMD_EEPROM_READ:
             break;
+
         case CH395_CMD_READ_GPIO_REG:
             break;
+
         case CH395_CMD_WRITE_GPIO_REG:
             break;
+
         default:
             printf(">>[CH395][UNKNOWN]\n");
             break;
-
     }
-
 
     return 0;
 }
@@ -1731,13 +1742,16 @@ Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 {
     fBank = fBank; // gcc [-Wunused-parameter]
 
+
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
     instance--;
 
-    if (addr == 0x00) return ch395_read_data_port(userdata[instance]);
-    if (addr == 0x01) return ch395_read_command_port(userdata[instance]);
+    if (addr == 0x00) return ch395_read_data_port(userdata[instance], run);
+    if (addr == 0x01) return ch395_read_command_port(userdata[instance], run);
+
+    return 0;
 
 }
 
@@ -1800,6 +1814,11 @@ SDL_bool ch395_shutdown(struct machine *oric, unsigned int instance)
     oric = oric; // gcc [-Wunused-parameter]
     instance = instance; // gcc [-Wunused-parameter]
 
+    if (plugin_instances >= INSTANCE_MAX)
+        return SDL_FALSE;
+
+    free(userdata[instance]);
+
     return SDL_TRUE;
 }
 
@@ -1826,7 +1845,6 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 SDL_bool ch395_reset(struct expansion_bus *oric, unsigned int instance)
 {
     dbg_printf("CH395_reset(%d)\n", instance);
-
     return SDL_TRUE;
 }
 
@@ -1954,8 +1972,6 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
                 my_tzprintfpos( ptz, pos_state, 4 + i,  "ERR");
                 break;
         }
-
-
 
         pos_state += 12;
         my_tzprintfpos( ptz, pos_state, 4 + i,  "%d", userdata[instance]->socket_ttl[i]);
@@ -2098,27 +2114,7 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
     my_tzprintfpos( ptz, pos_state, 4 + i + 5, "Mask: %d.%d.%d,%d",userdata[instance]->ip_chip[11],userdata[instance]->ip_chip[10],userdata[instance]->ip_chip[9],userdata[instance]->ip_chip[8]);
     my_tzprintfpos( ptz, pos_state, 4 + i + 6, "NS2 : %d.%d.%d.%d",userdata[instance]->ip_chip[15],userdata[instance]->ip_chip[14],userdata[instance]->ip_chip[13],userdata[instance]->ip_chip[12]);
     my_tzprintfpos( ptz, pos_state, 4 + i + 7, "NS1 : %d.%d.%d.%d",userdata[instance]->ip_chip[19],userdata[instance]->ip_chip[18],userdata[instance]->ip_chip[17],userdata[instance]->ip_chip[16]);
-    //pos_state += strlen("Socket4 interrupt");
 
-
-    // if (userdata[instance]->ch395->glob_int_status & )
- /*
-
-
-    // Trait de séparation en ligne 8
-    ptz->px = 0;
-    ptz->py = 8;
-    my_tzputc( ptz, 6 );
-
-    for (int i=0; i < ptz->w-2; i++)
-//        my_tzputc( ptz, 2 );
-        my_tzputc( ptz, 12 );
-
-    my_tzputc( ptz, 8 );
-
-    my_tzprintfpos( ptz, 2, 9 , "Twil register : $%02X", twilighte->t_register );
-
-*/
 }
 
 // -------------------------------------------------------------------------
@@ -2152,6 +2148,4 @@ struct PLUGIN plugin = { "ch395",
                 mon_ch395_update,
                 mon_ch395_store,
     };
-
-
 
