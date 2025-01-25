@@ -149,8 +149,8 @@
 
 #define CH395_GINT_STAT_SOCK4               1
 #define CH395_GINT_STAT_SOCK5               2
-#define CH395_GINT_STAT_SOCK6               3
-#define CH395_GINT_STAT_SOCK7               4
+#define CH395_GINT_STAT_SOCK6               4
+#define CH395_GINT_STAT_SOCK7               8
 
 #include <stdint.h>
 #include <stdbool.h>

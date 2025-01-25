@@ -277,6 +277,37 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
     return 1;
 }
 
+int perform_recv_socket(struct ch395 *ch395, unsigned char socketid)
+{
+    void *p;
+    // Send recv
+    int bytes_to_read_from_ch395;
+    unsigned char socket = ch395->cmd_data.CMD_SocketWriteBuffer[0];
+    // Compute position of the buffer
+    // Get buffer offset
+    p = &ch395->buffer[ch395->transmit_buffer_start_block[socketid] * CH395_SIZE_BLOCK_BUFFER];
+    // Read data from socket
+    // We will read into the buffer the size of the received buffer
+    // Compute the size
+    bytes_to_read_from_ch395 = ch395->receive_buffer_number_of_block[socketid] * CH395_SIZE_BLOCK_BUFFER;
+    // And put the size in recv
+    int bytes_received = recv(ch395->sockfd_host[socketid], p, bytes_to_read_from_ch395, 0);
+    printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
+    dbg_printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
+    if (bytes_received < 0)
+    {
+        perror("Erreur lors de la réception des données");
+        return 1;
+    }
+    // Set flag recv
+    printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socketid);
+    dbg_printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socketid);
+    ch395->socket_int_status[socketid] |= CH395_SINT_STAT_RECV;
+    // Store the number of bytes received
+    ch395->buffer_position_receive[socketid] = bytes_received;
+}
+
+
 int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 {
     char ip[16]; // 16 pour contenir l'IP au format "xxx.xxx.xxx.xxx\"
@@ -300,14 +331,13 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
     }
     printf("Connection to : %s:%d\n",ip, port);
     dbg_printf("Connection to : %s:%d\n",ip, port);
-    //ch395->CommandData
-    //server_addr.sin_addr.s_addr =*((unsigned long *)host->h_addr_list[0]);
+
 
     //Se connecter au serveur
     if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Erreur lors de la connexion au serveur");
-        printf("erreur de la Connexion vers : %s:%d\n",ip, port);
-        dbg_printf("erreur de la  Connexion vers : %s:%d\n",ip, port);
+        printf("erreur de la Connexion vers : %s:%d\n", ip, port);
+        dbg_printf("erreur de la  Connexion vers : %s:%d\n", ip, port);
         return 1;
     }
 
@@ -322,6 +352,12 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 void ch395_init_internal(struct ch395 *ch395)
 {
     unsigned char i;
+    // Global interrupt status
+    //[Verified on real computer] If ch395 is not initialized (with init command) glob_int_status is set to 0 at boot
+    ch395->glob_int_status = 0;
+    //[Verified on real computer] If ch395 is not initialized (with init command) glob_int_status_all is set to 0 at boot
+    ch395->glob_int_status_all[0] = 0;
+    ch395->glob_int_status_all[1] = 0;
     for(i=0;i<8;i++)
     {
         //ch395->socket_state[i] = CH395_SOCKET_CLOSED; // Socket state FIXME doublon
@@ -614,29 +650,71 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS] value : %d \n",ch395->glob_int_status);
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS] value : %d \n",ch395->glob_int_status);
+            /*
+            7 GINT_STAT_SOCK3 Socket3 interrupt
+            6 GINT_STAT_SOCK2 Socket2 interrupt
+            5 GINT_STAT_SOCK1 Socket1 interrupt
+            4 GINT_STAT_SOCK0 Socket0 interrupt
+            3 GINT_STAT_DHCP DHCP interrupt
+            2 GINT_STAT_PHY_CHANGE PHY status change interrupt
+            1 GINT_STAT_IP_CONFLI IP conflict
+            0 GINT_STAT_UNREACH Inaccessible interrupt
+            */
+            printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS]");
+            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS]");
 
             data = ch395->glob_int_status;
 
             if (ch395->glob_int_status & CH395_GINT_STAT_SOCK3)
             {
+                ch395_debug_concat("SOCK3 interrupt detected, clear sock3 interrupt now");
                 ch395->glob_int_status &= ~CH395_GINT_STAT_SOCK3;
             }
+
             if (ch395->glob_int_status & CH395_GINT_STAT_SOCK2)
             {
+                ch395_debug_concat("SOCK2 interrupt detected, clear sock2 interrupt now");
                 ch395->glob_int_status &= ~CH395_GINT_STAT_SOCK2;
             }
 
             if (ch395->glob_int_status & CH395_GINT_STAT_SOCK1)
             {
+                ch395_debug_concat("SOCK1 interrupt detected, clear sock1 interrupt now");
                 ch395->glob_int_status &= ~CH395_GINT_STAT_SOCK1;
             }
 
             if (ch395->glob_int_status & CH395_GINT_STAT_SOCK0)
             {
+                ch395_debug_concat("SOCK0 interrupt detected, clear sock0 interrupt now");
                 ch395->glob_int_status &= ~CH395_GINT_STAT_SOCK0;
             }
+
+            if (ch395->glob_int_status & CH395_GINT_STAT_DHCP)
+            {
+                ch395_debug_concat("DHCP interrupt detected, clear DHCP interrupt now");
+                ch395->glob_int_status &= ~CH395_GINT_STAT_DHCP;
+            }
+
+            if (ch395->glob_int_status & CH395_GINT_STAT_PHY_CHANGE)
+            {
+                ch395_debug_concat("PHY_CHANGE interrupt detected, clear PHY_CHANGE interrupt now");
+                ch395->glob_int_status &= ~CH395_GINT_STAT_PHY_CHANGE;
+            }
+
+            if (ch395->glob_int_status & CH395_GINT_STAT_IP_CONFLI)
+            {
+                ch395_debug_concat("IP_CONFLI interrupt detected, clear IP_CONFLI interrupt now");
+                ch395->glob_int_status &= ~CH395_GINT_STAT_IP_CONFLI;
+            }
+
+            if (ch395->glob_int_status & CH395_GINT_STAT_UNREACH)
+            {
+                ch395_debug_concat("UNREACH interrupt detected, clear UNREACH interrupt now");
+                ch395->glob_int_status &= ~CH395_GINT_STAT_UNREACH;
+            }
+
+            ch395_debug_concat("\n");
+
 
             break;
 
@@ -664,6 +742,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             {
                 // Remettre le bit CH395_SINT_STAT_SENBUF_FREE à 0
                 ch395->socket_int_status[socket] &= ~CH395_SINT_STAT_SENBUF_FREE;
+                perform_recv_socket(ch395, socket);
             }
 
 
@@ -693,22 +772,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
 
             if (data & CH395_SINT_STAT_SEND_OK)
             {
-
-                // Send recv
-
-                // Compute position of the buffer
-                void *p = &ch395->buffer[ch395->transmit_buffer_start_block[socket]*CH395_SIZE_BLOCK_BUFFER];
-                // Read data from socket
-                int bytes_received = recv(ch395->sockfd_host[socket], p, 800, 0);
-                if (bytes_received < 0)
-                {
-                    perror("Erreur lors de la réception des données");
-                    return 1;
-                }
-                ch395->socket_int_status[socket] |= CH395_SINT_STAT_RECV;
-                ch395->buffer_position_receive[socket] = bytes_received;
                 strcat(msg," CH395_SINT_STAT_SEND_OK");
-                strcat(msg," => CH395_SINT_STAT_SEND_OK state cleared, setting CH395_SINT_STAT_RECV now (recv is performed)");
+                strcat(msg," => CH395_SINT_STAT_SEND_OK state cleared, setting CH395_SINT_STAT_RECV now");
                 //
 
                 switch(socket)
@@ -1064,8 +1129,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
     switch(ch395->command)
     {
          case CH395_CMD_GET_IC_VER:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
             break;
 
         case CH395_CMD_CHECK_EXIST:
@@ -1081,11 +1145,11 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_RESET_ALL:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_RESET_ALL][ERROR] RESET_ALL can not accepted data on data port!\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_RESET_ALL][ERROR] RESET_ALL can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_RESET_ALL][ERROR] RESET_ALL can not accepted data on data port!\n");
             break;
 
         case CH395_CMD_SET_PHY:
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_PHY][ERROR] Not emulated!\n");
             break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS_ALL:
@@ -1146,6 +1210,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             printf(">>[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
             break;
+
         case CH395_CMD_GET_SOCKET_STATUS_SN:
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_SOCKET_STATUS_SN]");
 
@@ -1382,10 +1447,12 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 dbg_printf("Error too much bytes into data port\n");
             }
             ch395->nb_bytes_in_cmd_data ++;
-            perform_connect_socket(ch395, ch395->cmd_data.CMD_SocketWriteBuffer[0]);
+            int connect_error = perform_connect_socket(ch395, ch395->cmd_data.CMD_SocketWriteBuffer[0]);
             printf("Launching connect from socket %d\n", ch395->cmd_data.CMD_SocketWriteBuffer[0]);
             dbg_printf("Launching connect from socket %d\n", ch395->cmd_data.CMD_SocketWriteBuffer[0]);
-            ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = CH395_SINT_STAT_CONNECT;
+            // Connect is OK, set CH395_SINT_STAT_CONNECT
+            if (connect_error == 0)
+                ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = CH395_SINT_STAT_CONNECT;
 
             break;
 
@@ -1424,7 +1491,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 break;
             }
             // Launch socket (for instance stub)
-            ch395->buffer[ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketWriteBuffer[0]]*CH395_SIZE_BLOCK_BUFFER + ch395->nb_bytes_in_cmd_data - 3]  = data;
+            ch395->buffer[ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketWriteBuffer[0]] * CH395_SIZE_BLOCK_BUFFER + ch395->nb_bytes_in_cmd_data - 3] = data;
 
             if (data == 13)
                 {
@@ -1459,21 +1526,91 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] | CH395_SINT_STAT_SEND_OK;
 
+                unsigned char socket = ch395->cmd_data.CMD_SocketWriteBuffer[0];
+
+/*
+                // Send recv
+                int bytes_to_read_from_ch395;
+
+                // Compute position of the buffer
+                // Get buffer offset
+                p = &ch395->buffer[ch395->transmit_buffer_start_block[socket] * CH395_SIZE_BLOCK_BUFFER];
+                // Read data from socket
+                // We will read into the buffer the size of the received buffer
+                // Compute the size
+                bytes_to_read_from_ch395 = ch395->receive_buffer_number_of_block[socket] * CH395_SIZE_BLOCK_BUFFER;
+                // And put the size in recv
+                int bytes_received = recv(ch395->sockfd_host[socket], p, bytes_to_read_from_ch395, 0);
+                printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
+                dbg_printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
+                if (bytes_received < 0)
+                {
+                    perror("Erreur lors de la réception des données");
+                    return 1;
+                }
+                // Set flag recv
+                printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socket);
+                dbg_printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socket);
+                ch395->socket_int_status[socket] |= CH395_SINT_STAT_RECV;
+                // Store the number of bytes received
+                ch395->buffer_position_receive[socket] = bytes_received;
+*/
+                // Set irq flag for socket
                 switch (ch395->cmd_data.CMD_SocketWriteBuffer[0])
                 {
                     case 0:
                         ch395->glob_int_status = ch395->glob_int_status | CH395_GINT_STAT_SOCK0;
                         break;
+
                     case 1:
                         ch395->glob_int_status = ch395->glob_int_status | CH395_GINT_STAT_SOCK1;
                         break;
+
                     case 2:
                         ch395->glob_int_status = ch395->glob_int_status | CH395_GINT_STAT_SOCK2;
                         break;
+
                     case 3:
                         ch395->glob_int_status = ch395->glob_int_status | CH395_GINT_STAT_SOCK3;
                         break;
                 }
+
+                switch (ch395->cmd_data.CMD_SocketWriteBuffer[0])
+                {
+                    case 0:
+                        ch395->glob_int_status = ch395->glob_int_status_all[0] | CH395_GINT_STAT_SOCK0;
+                        break;
+
+                    case 1:
+                        ch395->glob_int_status = ch395->glob_int_status_all[0] | CH395_GINT_STAT_SOCK1;
+                        break;
+
+                    case 2:
+                        ch395->glob_int_status = ch395->glob_int_status_all[0] | CH395_GINT_STAT_SOCK2;
+                        break;
+
+                    case 3:
+                        ch395->glob_int_status = ch395->glob_int_status_all[0] | CH395_GINT_STAT_SOCK3;
+                        break;
+
+                    case 4:
+                        ch395->glob_int_status = ch395->glob_int_status_all[1] | CH395_GINT_STAT_SOCK4;
+                        break;
+
+                    case 5:
+                        ch395->glob_int_status = ch395->glob_int_status_all[1] | CH395_GINT_STAT_SOCK5;
+                        break;
+
+                    case 6:
+                        ch395->glob_int_status = ch395->glob_int_status_all[1] | CH395_GINT_STAT_SOCK6;
+                        break;
+
+                    case 7:
+                        ch395->glob_int_status = ch395->glob_int_status_all[1] | CH395_GINT_STAT_SOCK7;
+                        break;
+
+                }
+
 
             }
             break;
@@ -1511,6 +1648,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             }
             if (ch395->nb_bytes_in_cmd_data < 4 )
             {
+                // Store the socket id + length (low) + length (high)
+                // FIXME : Generate warn if length is greater than we can receive
                 ch395->cmd_data.CMD_SocketGetRecvBuf[ch395->nb_bytes_in_cmd_data] = data;
                 ch395->nb_bytes_in_cmd_data ++;
             }
