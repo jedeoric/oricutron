@@ -661,9 +661,9 @@ void SDL_COMPAT_MakeCurrent(SDL_Window *window, SDL_GLContext context)
 }
 #endif
 #else
-void SDL_COMPAT_MakeCurrent(SDL_Window *window, SDL_GLContext context)
-{
-}
+// void SDL_COMPAT_MakeCurrent(SDL_Window *window, SDL_GLContext context)
+// {
+// }
 #endif
 
 #if SDL_MAJOR_VERSION == 1
