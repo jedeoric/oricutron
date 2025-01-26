@@ -409,7 +409,7 @@ void ch395_init_internal(struct ch395 *ch395)
 }
 
 
-int ch395_create(struct machine *oric)
+unsigned int ch395_create(struct machine *oric)
 {
     int i;
     oric = oric; // gcc [-Wunused-parameter]
@@ -718,7 +718,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
 
             break;
 
-        case CH395_CMD_GET_INT_STATUS_SN:
+        case CH395_CMD_GET_INT_STATUS_SN: ;
             unsigned char socket = ch395->cmd_data.CMD_SocketGetIntStatusSn[0];
             data = ch395->socket_int_status[socket];
             // When a socket is not open CH395_CMD_GET_INT_STATUS_SN command returns always 0 for socket state
@@ -1071,7 +1071,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_FUN_PARA] not emulated\n");
             ch395->command = CH395_CMD_SET_FUN_PARA;
             break;
- 
+
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_IDLE] Not emulated\n");
             ch395->command = CH395_CMD_SET_KEEP_LIVE_IDLE;
@@ -1877,7 +1877,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 }
 
 
-Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8  ch395_read(struct expansion_bus *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
 
@@ -1894,7 +1894,7 @@ Uint8  ch395_read(struct machine *oric, SDL_bool fBank, unsigned int instance, U
 
 }
 
-SDL_bool ch395_write(struct machine *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
+SDL_bool ch395_write(struct expansion_bus *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
 
@@ -2050,7 +2050,7 @@ void mon_ch395_status(struct textzone *ptz, unsigned int instance, int pos_state
 
 }
 
-void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid, SDL_bool run)
+void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
     int i;
     base_addr = base_addr; // gcc [-Wunused-parameter]
@@ -2286,5 +2286,6 @@ struct PLUGIN plugin = { "ch395",
                 NULL,
                 mon_ch395_update,
                 mon_ch395_store,
+		NULL
     };
 
