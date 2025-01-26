@@ -270,5 +270,6 @@ struct PLUGIN plugin = { "REGISTER",
 		NULL,
                 mon_register_update,
                 mon_register_store,
+                NULL,
     };
 

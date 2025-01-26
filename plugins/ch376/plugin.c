@@ -475,5 +475,6 @@ struct PLUGIN plugin = { "CH376",
 		NULL,
                 mon_plugin_update,
                 mon_plugin_store,
+                NULL,
     };
 

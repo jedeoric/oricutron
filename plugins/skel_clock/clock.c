@@ -352,5 +352,6 @@ struct PLUGIN plugin = { "Clock",
                 clock_ticktock,
                 mon_clock_update,
                 mon_clock_store,
+                NULL,
     };
 

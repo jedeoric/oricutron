@@ -1418,7 +1418,7 @@ void resetoric( struct machine *oric, struct osdmenuitem *mitem, int dummy )
   }
 
   // [- Assinie
-  periph_reset_all(oric);
+  device_reset_all(oric);
   // -]
 
   setromon( oric );

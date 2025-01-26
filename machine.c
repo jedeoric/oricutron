@@ -324,8 +324,8 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
 
     // [Assinie] - Tests
     // [--
-    if (periph_present(oric, addr))
-        return periph_read(oric, addr);
+    if (device_present(oric, addr))
+        return device_read(oric, addr);
     // --]
 
     return via_read( &oric->via, addr );
@@ -336,8 +336,8 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
     // [Assinie] - Tests
     // [--
 
-    // if (periph_present(oric, addr))
-    //    return periph_read(oric, addr);
+    // if (device_present(oric, addr))
+    //    return device_read(oric, addr);
     // --]
 
     // [Assinie--
@@ -353,8 +353,8 @@ unsigned char oric_atmosread( struct m6502 *cpu, unsigned short addr )
 
     // [Assinie] - Tests
     // [--
-    if ( (oric->romdis) && (addr >= 0xc000) && periph_present(oric, addr) )
-        return periph_read(oric, addr);
+    if ( (oric->romdis) && (addr >= 0xc000) && device_present(oric, addr) )
+        return device_read(oric, addr);
     // --]
 
   switch (oric->type)
@@ -452,9 +452,9 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
   // if (oric->twilighteboard_activated &&  addr >= 0xc000  )
   //   twilighteboard_oric_ROM_RAM_write(oric->twilighte,addr-0xc000,data);
   // else
-  if ( (oric->romdis) && ( addr >= 0xc000) && periph_present(oric, addr) )
+  if ( (oric->romdis) && ( addr >= 0xc000) && device_present(oric, addr) )
   {
-      periph_write(oric, addr, data);
+      device_write(oric, addr, data);
       return;
   }
   // --]
@@ -480,9 +480,9 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
 
     // [Assinie] - Tests
     // [--
-    else if (periph_present(oric, addr))
+    else if (device_present(oric, addr))
     {
-        periph_write(oric, addr, data);
+        device_write(oric, addr, data);
         return;
     }
     // --]
@@ -494,9 +494,9 @@ void oric_atmoswrite( struct m6502 *cpu, unsigned short addr, unsigned char data
 
     // [Assinie] - Tests
     // [--
-    // else if (periph_present(oric, addr))
+    // else if (device_present(oric, addr))
     // {
-    //     periph_write(oric, addr, data);
+    //     device_write(oric, addr, data);
     //     return;
     // }
 
@@ -2125,12 +2125,12 @@ SDL_bool init_machine( struct machine *oric, int type, SDL_bool nukebreakpoints 
 
   // [Assinie--
   // Ici la config a été lue donc on sait si ch376 est activé ou non
-  periph_test(oric);
-  periph_list();
+  device_test(oric);
+  device_list();
   // -]
-  periph_reset_all(oric);
-  error_printf("init_machine: apres periph_reset, romdis=%d", oric->romdis);
-  error_printf("init_machine: apres periph_reset, printenable=%d", oric->printenable);
+  device_reset_all(oric);
+  error_printf("init_machine: apres device_reset, romdis=%d", oric->romdis);
+  error_printf("init_machine: apres device_reset, printenable=%d", oric->printenable);
   // -]
 
   setromon( oric );
@@ -2356,7 +2356,7 @@ SDL_bool emu_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           }
 
           // [- Assinie
-          periph_reset_all(oric);
+          device_reset_all(oric);
           // -]
 
           setromon( oric );

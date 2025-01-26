@@ -771,8 +771,8 @@ unsigned char mon_read( struct machine *oric, unsigned short addr )
   // [-Assinie
   if( ( addr & 0xff00 ) == 0x0300 )
   {
-    if (periph_present(oric, addr))
-      return (periph_mon_read(oric, addr));
+    if (device_present(oric, addr))
+      return (device_mon_read(oric, addr));
   }
   // -]
 
@@ -1727,7 +1727,7 @@ void mon_state_reset( struct machine *oric )
   via_oldvalid = SDL_FALSE;
   via2_oldvalid = SDL_FALSE;
   // [- Assinie
-  mon_periph_oldvalid(SDL_FALSE);
+  mon_device_oldvalid(SDL_FALSE);
   // -]
 }
 
@@ -2127,8 +2127,8 @@ void mon_init( struct machine *oric )
   mon_bpmsg[0] = 0;
   mshow = MSHOW_VIA;
   // [- Assinie
-  MSHOW_LAST = MSHOW_PERIPH+mon_periph_count()+1;
-  // MSHOW_LAST = MSHOW_PERIPH+mon_periph_count();
+  MSHOW_LAST = MSHOW_PERIPH+mon_device_count()+1;
+  // MSHOW_LAST = MSHOW_PERIPH+mon_device_count();
   dbg_printf("MSHOW_LAST = %d\n", MSHOW_LAST);
   // -]
   cshow = CSHOW_CONSOLE;
@@ -2144,7 +2144,7 @@ void mon_init( struct machine *oric )
   ay_oldvalid = SDL_FALSE;
   via_oldvalid = SDL_FALSE;
   // [- Assinie
-  mon_periph_oldvalid(SDL_FALSE);
+  mon_device_oldvalid(SDL_FALSE);
   // -]
 #if LOG_DEBUG
   debug_logfile = fopen( debug_logname, "w" );
@@ -4276,7 +4276,7 @@ static unsigned int steppy_step( struct machine *oric )
   ay_ticktock( &oric->ay, oric->cpu.icycles );
 
   // [- Assinie
-  periph_ticktock_all(oric, oric->cpu.icycles);
+  device_ticktock_all(oric, oric->cpu.icycles);
   // -]
 
   if((oric->drivetype == DRV_MICRODISC) || (oric->drivetype == DRV_JASMIN)) wd17xx_ticktock( &oric->wddisk, oric->cpu.icycles );
@@ -4393,7 +4393,7 @@ SDL_bool mon_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           ay_ticktock( &oric->ay, oric->cpu.icycles );
 
           // [- Assinie
-          periph_ticktock_all(oric, oric->cpu.icycles);
+          device_ticktock_all(oric, oric->cpu.icycles);
           // -]
 
           if((oric->drivetype == DRV_MICRODISC) || (oric->drivetype == DRV_JASMIN)) wd17xx_ticktock( &oric->wddisk, oric->cpu.icycles );
@@ -4430,7 +4430,7 @@ SDL_bool mon_event( SDL_Event *ev, struct machine *oric, SDL_bool *needrender )
           // if( ( oric->twilighteboard_activated == SDL_FALSE ) && ( mshow == MSHOW_TWIL ) )
           //   mshow = (mshow+1)%MSHOW_LAST;
           // --]
-          while ( (mshow >= MSHOW_PERIPH) && (!mon_periph_enabled_by_id(mshow - MSHOW_PERIPH)) )
+          while ( (mshow >= MSHOW_PERIPH) && (!mon_device_enabled_by_id(mshow - MSHOW_PERIPH)) )
             mshow = (mshow+1)%MSHOW_LAST;
           *needrender = SDL_TRUE;
           break;

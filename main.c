@@ -1530,7 +1530,7 @@ void frameloop_overclock( struct machine *oric, SDL_bool *framedone, SDL_bool *n
       ay_ticktock( &oric->ay, instcycles );
 
       // [- Assinie
-      periph_ticktock_all(oric, instcycles);
+      device_ticktock_all(oric, instcycles);
       // -]
 
       switch( oric->drivetype )
@@ -1599,7 +1599,7 @@ void frameloop_normal( struct machine *oric, SDL_bool *framedone, SDL_bool *need
       ay_ticktock( &oric->ay, oric->cpu.icycles );
 
       // [- Assinie
-      periph_ticktock_all(oric, oric->cpu.icycles);
+      device_ticktock_all(oric, oric->cpu.icycles);
       // -]
 
       switch( oric->drivetype )
@@ -1659,6 +1659,7 @@ void once_per_frame( struct machine *oric )
     }
   }
 }
+
 
 static void loop_handler( void* arg )
 {
@@ -1767,37 +1768,60 @@ static void loop_handler( void* arg )
     }
 
     do {
-       switch (event->type) {
-            case SDL_COMPAT_ACTIVEEVENT: {
-                if (SDL_COMPAT_IsAppActive(event)) {
-                    oric->shut_render(oric);
-                    oric->init_render(oric);
-                    ctx->needrender = SDL_TRUE;
-                }
-            }
-                break;
-            case SDL_QUIT:
-                done = SDL_TRUE;
-                break;
-
-            default:
-                switch (oric->emu_mode) {
-                    case EM_MENU:
-                        done |= menu_event(event, oric, &ctx->needrender);
-                        break;
-
-                    case EM_RUNNING:
-                        done |= emu_event(event, oric, &ctx->needrender);
-                        break;
-#ifndef WWW_NO_MONITOR
-                    case EM_DEBUG:
-                        done |= mon_event(event, oric, &ctx->needrender);
-                        break;
+      // [- Assinie
+#if SDL_MAJOR_VERSION == 1
+#else
+      if (SDL_COMPAT_IsMainWindow(event))
+      {
+      // --]
 #endif
-                }
-        }
-        if (oric->show_keyboard)
-            keyboard_event(event, oric, &ctx->needrender);
+         switch (event->type) {
+              case SDL_COMPAT_ACTIVEEVENT: {
+#if SDL_MAJOR_VERSION == 1
+                      if (SDL_COMPAT_IsAppActive(event)) {
+                          oric->shut_render(oric);
+                          oric->init_render(oric);
+                          ctx->needrender = SDL_TRUE;
+                      }
+#else
+                      if ( (event->window.event == SDL_WINDOWEVENT_FOCUS_GAINED) || (event->window.event == SDL_WINDOWEVENT_EXPOSED) )
+                      {
+                          fprintf(stderr, "** Main: render\n");
+                          render( oric );
+                          ctx->needrender = SDL_FALSE;
+                      }
+#endif
+              }
+                  break;
+              case SDL_QUIT:
+                  done = SDL_TRUE;
+                  break;
+
+              default:
+                  switch (oric->emu_mode) {
+                      case EM_MENU:
+                          done |= menu_event(event, oric, &ctx->needrender);
+                          break;
+
+                      case EM_RUNNING:
+                          done |= emu_event(event, oric, &ctx->needrender);
+                          break;
+  #ifndef WWW_NO_MONITOR
+                      case EM_DEBUG:
+                          done |= mon_event(event, oric, &ctx->needrender);
+                          break;
+  #endif
+                  }
+          }
+          if (oric->show_keyboard)
+              keyboard_event(event, oric, &ctx->needrender);
+      // [- Assinie
+#if SDL_MAJOR_VERSION == 1
+#else
+        } else
+          device_sdl_event(event);
+#endif
+      // --]
       } while ( SDL_PollEvent( event ) );
 
 #if defined(WWW)

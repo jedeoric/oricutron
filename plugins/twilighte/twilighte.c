@@ -900,5 +900,6 @@ struct PLUGIN plugin = { "Twilghte",
                 NULL,
                 mon_twilighte_update,
                 mon_twilighte_store,
+                NULL,
     };
 

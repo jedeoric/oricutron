@@ -43,6 +43,8 @@ struct PLUGIN {
 
     void (*mon_update)(struct textzone *tz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid);
     void (*mon_store_state)(struct machine *oric, unsigned int instance);
+
+    SDL_bool (*sdl_event)(SDL_Event* event);
 };
 /*
 struct PLUGINS {

@@ -240,5 +240,6 @@ struct PLUGIN plugin = { "My cartridge",
                 NULL,
                 mon_cartridge_update,
                 NULL,
+                NULL,
     };
 

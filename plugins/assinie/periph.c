@@ -59,7 +59,7 @@ struct DEVICE {
     Uint16 type;
     unsigned int instance;
     SDL_bool enable;
-    struct PLUGIN *periph;
+    struct PLUGIN *device;
 };
 
 struct DEVICE devices_table[MAX_PERIPH];
@@ -94,6 +94,19 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
     if (plugin == NULL)
         return SDL_FALSE;
 
+#if SDL_MAJOR_VERSION == 1
+    if (plugin->sdl_event != NULL)
+    {
+        /*
+         * En principe si le plugin utlise des fonctions SDL2 il y aura une erreur
+         * lors du chargement de la librairie donc on ne devrait même pas arriver
+         * ici.
+        */
+        fprintf(stderr, "SDL2 requis pour ce plugin\n");
+        return SDL_FALSE;
+    }
+#endif
+
     if (nb_periph == MAX_PERIPH)
         return SDL_FALSE;
 
@@ -124,15 +137,15 @@ SDL_bool periph_add(struct machine *oric, struct PLUGIN *plugin, char *name, Uin
 
     devices_table[i].instance = instance;
 
-    devices_table[i].periph = plugin;
+    devices_table[i].device = plugin;
 
     devices_table[i].addr_start = addr_start;
 
-    devices_table[i].addr_end = devices_table[i].addr_start + devices_table[i].periph->size - 1;
+    devices_table[i].addr_end = devices_table[i].addr_start + devices_table[i].device->size - 1;
 
     devices_table[i].enable = enable;
 
-    devices_table[i].type = devices_table[i].periph->type;
+    devices_table[i].type = devices_table[i].device->type;
 
     if ( devices_table[i].enable && (devices_table[i].type & PLG_PRINTER) )
         oric->printenable = SDL_FALSE;
@@ -214,8 +227,8 @@ SDL_bool periph_reset_by_name(struct machine *oric, char *name)
 
     if (i != nb_periph) return SDL_FALSE;
 
-    if (devices_table[i].periph->reset != NULL)
-        return (devices_table[i].periph->reset(oric, devices_table[i].instance));
+    if (devices_table[i].device->reset != NULL)
+        return (devices_table[i].device->reset(oric, devices_table[i].instance));
 
     else
         return SDL_TRUE;
@@ -232,8 +245,8 @@ SDL_bool periph_reset_by_id(struct expansion_bus *oric_bus, int id)
 
     // plugin->reset peut utiliser oric_bus->type et oric_bus->drivetype
 
-    if (devices_table[id].periph->reset != NULL)
-        return (devices_table[id].periph->reset(oric_bus, devices_table[id].instance));
+    if (devices_table[id].device->reset != NULL)
+        return (devices_table[id].device->reset(oric_bus, devices_table[id].instance));
 
     else
         return SDL_TRUE;
@@ -242,7 +255,7 @@ SDL_bool periph_reset_by_id(struct expansion_bus *oric_bus, int id)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool periph_reset_all(struct machine *oric)
+SDL_bool device_reset_all(struct machine *oric)
 {
     int i=0;
 
@@ -258,12 +271,12 @@ SDL_bool periph_reset_all(struct machine *oric)
 
     while (i != nb_periph)
     {
-        if (devices_table[i].enable && (devices_table[i].periph->reset != NULL))
+        if (devices_table[i].enable && (devices_table[i].device->reset != NULL))
         {
             dbg_printf("PERIPH init: %s\n", devices_table[i].name);
 
             // plugin->reset peut utiliser oric->type et oric->drivetype
-            if ( !devices_table[i].periph->reset(&oric_bus, devices_table[i].instance) )
+            if ( !devices_table[i].device->reset(&oric_bus, devices_table[i].instance) )
                 periph_enable_by_id(i, SDL_FALSE);
         }
         i++;
@@ -276,7 +289,7 @@ SDL_bool periph_reset_all(struct machine *oric)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
+SDL_bool device_ticktock_all(struct machine *oric, int cycles)
 {
     int i=0;
     struct expansion_bus oric_bus;
@@ -292,11 +305,11 @@ SDL_bool periph_ticktock_all(struct machine *oric, int cycles)
 
     while (i != nb_periph)
     {
-        if (devices_table[i].enable && (devices_table[i].periph->ticktock != NULL))
+        if (devices_table[i].enable && (devices_table[i].device->ticktock != NULL))
         {
             // dbg_printf("PERIPH ticktock: %s\n", devices_table[i].name);
 
-            devices_table[i].periph->ticktock(&oric_bus, devices_table[i].instance, cycles);
+            devices_table[i].device->ticktock(&oric_bus, devices_table[i].instance, cycles);
         }
         i++;
     }
@@ -343,8 +356,8 @@ SDL_bool periph_shut_by_id(struct machine *oric, int id)
 
     dbg_printf("Shutdown %s\n", devices_table[id].name);
 
-    if (devices_table[id].periph->shutdown != NULL)
-        return (devices_table[id].periph->shutdown(oric, devices_table[id].instance));
+    if (devices_table[id].device->shutdown != NULL)
+        return (devices_table[id].device->shutdown(oric, devices_table[id].instance));
 
     else
         return SDL_TRUE;
@@ -353,7 +366,7 @@ SDL_bool periph_shut_by_id(struct machine *oric, int id)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-Uint8 periph_read(struct machine *oric, Uint16 addr)
+Uint8 device_read(struct machine *oric, Uint16 addr)
 {
     SDL_bool fBank = SDL_FALSE;
 
@@ -377,7 +390,7 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
     {
         // dbg_printf("PERIPH READ: %s ($%04x): (from: $%04x)", devices_table[i].name, addr, oric->cpu.lastpc);
 
-        // return devices_table[i].periph->read(oric, devices_table[i].instance, addr - devices_table[i].addr_start);
+        // return devices_table[i].device->read(oric, devices_table[i].instance, addr - devices_table[i].addr_start);
 
         if (addr >= 0xc000)
         {
@@ -387,9 +400,9 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
         else
             addr = addr - devices_table[i].addr_start;
 
-        if (devices_table[i].periph->read != NULL)
+        if (devices_table[i].device->read != NULL)
         {
-            data = devices_table[i].periph->read(&oric_bus, fBank, devices_table[i].instance, addr, SDL_TRUE);
+            data = devices_table[i].device->read(&oric_bus, fBank, devices_table[i].instance, addr, SDL_TRUE);
 
             if (oric_bus.reset)
                 machine_reset(oric);
@@ -408,7 +421,7 @@ Uint8 periph_read(struct machine *oric, Uint16 addr)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
+SDL_bool device_write(struct machine *oric, Uint16 addr, Uint8 data)
 {
     int i=periph_find_by_addr(oric, addr);
     SDL_bool fbank = (addr >= 0xc000);
@@ -434,9 +447,9 @@ SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data)
         else
             addr = addr - devices_table[i].addr_start;
 
-        if (devices_table[i].periph->write != NULL)
+        if (devices_table[i].device->write != NULL)
         {
-            SDL_bool ret =  devices_table[i].periph->write(&oric_bus, fbank, devices_table[i].instance, addr, data);
+            SDL_bool ret =  devices_table[i].device->write(&oric_bus, fbank, devices_table[i].instance, addr, data);
 
             if (oric_bus.reset)
                 machine_reset(oric);
@@ -493,8 +506,8 @@ int periph_find_by_addr(struct machine *oric, Uint16 addr)
                 (
                     ( devices_table[i].enable == SDL_FALSE ) ||
                     ( !(devices_table[i].type & PLG_BANK) ) ||
-                    ( (devices_table[i].periph->addresses == NULL) && ((addr < devices_table[i].addr_start) || (addr > devices_table[i].addr_end)) ) ||
-                    ( (devices_table[i].periph->addresses != NULL) && !devices_table[i].periph->addresses(devices_table[i].instance, addr - devices_table[i].addr_start) )
+                    ( (devices_table[i].device->addresses == NULL) && ((addr < devices_table[i].addr_start) || (addr > devices_table[i].addr_end)) ) ||
+                    ( (devices_table[i].device->addresses != NULL) && !devices_table[i].device->addresses(devices_table[i].instance, addr - devices_table[i].addr_start) )
                 )
             ) i++;
 */
@@ -504,8 +517,8 @@ int periph_find_by_addr(struct machine *oric, Uint16 addr)
                 (
                     ( devices_table[i].enable == SDL_FALSE) ||
                     ( !(devices_table[i].type & PLG_DEVICE) ) ||
-                    ( (devices_table[i].periph->addresses == NULL) && ((addr < devices_table[i].addr_start) || (addr > devices_table[i].addr_end)) ) ||
-                    ( (devices_table[i].periph->addresses != NULL) && !devices_table[i].periph->addresses(devices_table[i].instance, addr - devices_table[i].addr_start) )
+                    ( (devices_table[i].device->addresses == NULL) && ((addr < devices_table[i].addr_start) || (addr > devices_table[i].addr_end)) ) ||
+                    ( (devices_table[i].device->addresses != NULL) && !devices_table[i].device->addresses(devices_table[i].instance, addr - devices_table[i].addr_start) )
                 )
             ) i++;
 
@@ -516,8 +529,8 @@ int periph_find_by_addr(struct machine *oric, Uint16 addr)
                     (devices_table[i].enable == SDL_FALSE) ||
                     ( !(devices_table[i].type & PLG_DEVICE) ) ||
                     ( addr < devices_table[i].addr_start ) ||
-                    ( (devices_table[i].periph->addresses == NULL) && (addr > devices_table[i].addr_end) ) ||
-                    ( (devices_table[i].periph->addresses != NULL) && !devices_table[i].periph->addresses(devices_table[i].instance, addr) )
+                    ( (devices_table[i].device->addresses == NULL) && (addr > devices_table[i].addr_end) ) ||
+                    ( (devices_table[i].device->addresses != NULL) && !devices_table[i].device->addresses(devices_table[i].instance, addr) )
                 )
             ) i++;
 */
@@ -551,13 +564,17 @@ SDL_bool device_printer(Uint8 data, SDL_bool rw)
     if (rw)
     {
         // Read
+        /*
         error_printf("/// printer -> %02X", data);
+        */
     }
     else
     {
         // Write
+        /*
         error_printf("/// %02X -> printer", data);
-        devices_table[i].periph->write(NULL, SDL_FALSE, devices_table[i].instance, 0, data);
+        */
+        devices_table[i].device->write(NULL, SDL_FALSE, devices_table[i].instance, 0, data);
     }
 
     return SDL_TRUE;
@@ -566,7 +583,7 @@ SDL_bool device_printer(Uint8 data, SDL_bool rw)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool periph_present(struct machine *oric, Uint16 addr)
+SDL_bool device_present(struct machine *oric, Uint16 addr)
 {
     return (periph_find_by_addr(oric, addr) != nb_periph);
 }
@@ -574,9 +591,9 @@ SDL_bool periph_present(struct machine *oric, Uint16 addr)
 // -------------------------------------------------------------------------
 // INTERNAL (menu)
 // -------------------------------------------------------------------------
-SDL_bool periph_enabled_by_id(int id)
+SDL_bool device_enabled_by_id(int id)
 {
-    dbg_printf("periph_enabled_by_id(%d)\n", id);
+    dbg_printf("device_enabled_by_id(%d)\n", id);
 
     if ( (id < 0) || (id >= nb_periph) )
         return SDL_FALSE;
@@ -587,7 +604,7 @@ SDL_bool periph_enabled_by_id(int id)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-void periph_list()
+void device_list()
 {
     if (nb_periph == 0)
     {
@@ -666,9 +683,9 @@ void mon_periphmod( int x, int y, int w, struct textzone *vtz )
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool mon_periph_enabled_by_id(int id)
+SDL_bool mon_device_enabled_by_id(int id)
 {
-    dbg_printf("mon_periph_enabled_by_id(%d)\n", id);
+    dbg_printf("mon_device_enabled_by_id(%d)\n", id);
 
     if ( (id < 0) || (id >= nb_periph) )
         return SDL_FALSE;
@@ -684,7 +701,7 @@ SDL_bool mon_periph_enabled_by_id(int id)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
+Uint8 device_mon_read(struct machine *oric, Uint16 addr)
 {
     int i=periph_find_by_addr(oric, addr);
 
@@ -705,16 +722,16 @@ Uint8 periph_mon_read(struct machine *oric, Uint16 addr)
         Uint8 data = 0;
 
         dbg_printf("PERIPH MON READ: %s ($%04x): (from: $%04x)", devices_table[i].name, addr, oric->cpu.lastpc);
-        // return devices_table[i].periph->read(oric, devices_table[i].instance, addr - devices_table[i].addr_start);
+        // return devices_table[i].device->read(oric, devices_table[i].instance, addr - devices_table[i].addr_start);
 
-        if (devices_table[i].periph->read != NULL)
+        if (devices_table[i].device->read != NULL)
         {
             if (addr >= 0xc000)
                 addr = addr - 0xc000;
             else
                 addr = addr - devices_table[i].addr_start;
 
-            data = devices_table[i].periph->read(&oric_bus, (addr >= 0xc000), devices_table[i].instance, addr, SDL_FALSE);
+            data = devices_table[i].device->read(&oric_bus, (addr >= 0xc000), devices_table[i].instance, addr, SDL_FALSE);
 
             if (oric_bus.reset)
                 machine_reset(oric);
@@ -800,7 +817,7 @@ void mon_update_periph( struct machine *oric, int id )
     my_tzsettitle(ptz, devices_table[id].name);
     clear_textzone(oric, TZ_PERIPH);
 
-    if (devices_table[id].periph->mon_update == NULL)
+    if (devices_table[id].device->mon_update == NULL)
     {
         dbg_printf("PERIPH: mon_update(%d) == NULL", id);
 
@@ -825,7 +842,7 @@ void mon_update_periph( struct machine *oric, int id )
     // my_tzsettitle(ptz, devices_table[id].name);
     // clear_textzone(oric, TZ_PERIPH);
 
-    devices_table[id].periph->mon_update(ptz, devices_table[id].instance, devices_table[id].addr_start, periph_oldvalid);
+    devices_table[id].device->mon_update(ptz, devices_table[id].instance, devices_table[id].addr_start, periph_oldvalid);
 
 
 }
@@ -833,7 +850,7 @@ void mon_update_periph( struct machine *oric, int id )
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-int mon_periph_count()
+int mon_device_count()
 {
     return nb_periph;
 }
@@ -848,8 +865,8 @@ void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid)
 
     for (int id=0; id < nb_periph; id++)
     {
-        if (devices_table[id].periph->mon_store_state != NULL)
-            devices_table[id].periph->mon_store_state(oric, devices_table[id].instance);
+        if (devices_table[id].device->mon_store_state != NULL)
+            devices_table[id].device->mon_store_state(oric, devices_table[id].instance);
     }
     periph_oldvalid = oldvalid;
 }
@@ -858,9 +875,9 @@ void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-void mon_periph_oldvalid(SDL_bool oldvalid)
+void mon_device_oldvalid(SDL_bool oldvalid)
 {
-    dbg_printf("mon_periph_oldvalid(%d)\n", oldvalid);
+    dbg_printf("mon_device_oldvalid(%d)\n", oldvalid);
 
     periph_oldvalid = oldvalid;
 }
@@ -881,7 +898,7 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
     oric_bus.type =  oric->type;
     oric_bus.drivetype = oric->drivetype;
 
-    if( periph_enabled_by_id(id) )
+    if( device_enabled_by_id(id) )
     {
         periph_enable_by_id(id, SDL_FALSE);
 
@@ -909,6 +926,200 @@ void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id )
     }
 }
 
+// -------------------------------------------------------------------------
+// USED
+// -------------------------------------------------------------------------
+#if SDL_MAJOR_VERSION == 1
+void device_sdl_event(SDL_Event *event)
+{
+    fprintf(stderr, "device_sdl_event, event type: %d\n", event->type);
+}
+
+#else
+void EventDecode(SDL_Event *pEvent)
+{
+    switch (pEvent->type)
+    {
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            fprintf(stderr, "KEYDOWN/KEYUP: windowID = %d, state = %d, repeat = %d, scancode = %d, keysym = %d, mod = %d",
+            pEvent->key.windowID,
+            pEvent->key.state,
+            pEvent->key.repeat,
+            pEvent->key.keysym.scancode,
+            pEvent->key.keysym.sym,
+            pEvent->key.keysym.mod
+            );
+            break;
+
+        case SDL_MOUSEMOTION:
+            fprintf(stderr, "MOUSEMOTION: windowID = %d, which = %d, state = %d, x= %d, y= %d, xrel = %d, yrel = %d",
+            pEvent->motion.windowID,
+            pEvent->motion.which,
+            pEvent->motion.state,
+            pEvent->motion.x,
+            pEvent->motion.y,
+            pEvent->motion.xrel,
+            pEvent->motion.yrel
+            );
+            break;
+
+        case SDL_MOUSEWHEEL:
+            // fprintf(stderr, "MOUSEWHEEL: windowID = %d, which = %d, x= %d, y= %d, direction = %d, preciseX = %d, preciseY = %d, mouseX = %d, mouseY = %d",
+            fprintf(stderr, "MOUSEWHEEL: windowID = %d, which = %d, x= %d, y= %d, direction = %d",
+            pEvent->wheel.windowID,
+            pEvent->wheel.which,
+            pEvent->wheel.x,
+            pEvent->wheel.y,
+            pEvent->wheel.direction
+            /*
+            pEvent->wheel.preciseX,
+            pEvent->wheel.preciseY,
+            pEvent->wheel.mouseX,
+            pEvent->wheel.mouseY
+            */
+            );
+            break;
+
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            fprintf(stderr, "MOUSEBUTTONDOWN/UP: windowID = %d, which = %d, button = %d, state = %d, clicks = %d, x= %d, y= %d",
+            pEvent->button.windowID,
+            pEvent->button.which,
+            pEvent->button.button,
+            pEvent->button.state,
+            pEvent->button.clicks,
+            pEvent->button.x,
+            pEvent->button.y
+            );
+            break;
+
+        case SDL_TEXTEDITING:
+        case SDL_TEXTINPUT:
+
+        case SDL_QUIT:
+            fprintf(stderr, "QUIT");
+            break;
+
+        case SDL_WINDOWEVENT:
+        {
+            switch (pEvent->window.event)
+            {
+                case SDL_WINDOWEVENT_NONE:           /**< Never used */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_NONE");
+                    break;
+
+                case SDL_WINDOWEVENT_SHOWN:          /**< Window has been shown */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_SHOWN");
+                    break;
+
+                case SDL_WINDOWEVENT_HIDDEN:         /**< Window has been hidden */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_HIDDEN");
+                    break;
+
+                case SDL_WINDOWEVENT_EXPOSED:        /**< Window has been exposed and should be
+                                                 redrawn */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_EXPOSED");
+                    break;
+
+                case SDL_WINDOWEVENT_MOVED:          /**< Window has been moved to data1, data2
+                                             */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_MOVED");
+                    break;
+
+                case SDL_WINDOWEVENT_RESIZED:        /**< Window has been resized to data1xdata2 */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_RESIZED");
+                    break;
+
+                case SDL_WINDOWEVENT_SIZE_CHANGED:   /**< The window size has changed, either as
+                                                 a result of an API call or through the
+                                                 system or user changing the window size. */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_SIZE_CHANGED");
+                    break;
+
+                case SDL_WINDOWEVENT_MINIMIZED:      /**< Window has been minimized */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_MINIMIZED");
+                    break;
+
+                case SDL_WINDOWEVENT_MAXIMIZED:      /**< Window has been maximized */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_MAXIMIZED");
+                    break;
+
+                case SDL_WINDOWEVENT_RESTORED:       /**< Window has been restored to normal size
+                                                 and position */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_RESTORED");
+                    break;
+
+                case SDL_WINDOWEVENT_ENTER:          /**< Window has gained mouse focus */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_ENTER");
+                    break;
+
+                case SDL_WINDOWEVENT_LEAVE:          /**< Window has lost mouse focus */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_LEAVE");
+                    break;
+
+                case SDL_WINDOWEVENT_FOCUS_GAINED:   /**< Window has gained keyboard focus */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_FOCUS_GAINED");
+                    break;
+
+                case SDL_WINDOWEVENT_FOCUS_LOST:     /**< Window has lost keyboard focus */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_FOCUS_LOST");
+                    break;
+
+                case SDL_WINDOWEVENT_CLOSE:          /**< The window manager requests that the window be closed */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_CLOSE");
+                    break;
+
+                case SDL_WINDOWEVENT_TAKE_FOCUS:     /**< Window is being offered a focus (should SetWindowInputFocus() on itself or a subwindow, or ignore) */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_TAKE_FOCUS");
+                    break;
+
+                case SDL_WINDOWEVENT_HIT_TEST:       /**< Window had a hit test that wasn't SDL_HITTEST_NORMAL. */
+                    fprintf(stderr, "eventID = SDL_WINDOWEVENT_HIT_TEST");
+                    break;
+
+                default:
+                    fprintf(stderr, "eventID = %d", pEvent->window.event);
+            }
+            break;
+        }
+
+        default:
+            fprintf(stderr, "event.type = %d", pEvent->type);
+    }
+}
+
+void device_sdl_event(SDL_Event *event)
+{
+    int i = 0;
+
+    while ( (i < nb_periph) &&
+            ( (devices_table[i].device->sdl_event == NULL) ||
+                ((devices_table[i].device->sdl_event != NULL) &&
+                !devices_table[i].device->sdl_event(event))
+            )
+          ) i++;
+/*
+    for (i=0; i<nb_periph; i++)
+    {
+        if (devices_table[i].device->sdl_event != NULL)
+            devices_table[i].device->sdl_event(event);
+    }
+*/
+/*
+    if (event->type == SDL_COMPAT_ACTIVEEVENT)
+    {
+        fprintf(stderr, "Device WindowID = %d ", event->window.windowID);
+        EventDecode(&event->window);
+        fprintf(stderr, "\n");
+    }
+    else
+    {
+        fprintf(stderr, "Event type = %d\n", event->type);
+    }
+*/
+}
+#endif
 
 // *****************************************************************************
 //                      Déclaratoin des extensions
@@ -958,7 +1169,7 @@ struct PLUGIN * load_plugin(char *library_name)
 // -------------------------------------------------------------------------
 // USED
 // -------------------------------------------------------------------------
-SDL_bool periph_test(struct machine *oric)
+SDL_bool device_test(struct machine *oric)
 {
     // struct PLUGIN *plugin;
 
@@ -1010,6 +1221,14 @@ SDL_bool periph_test(struct machine *oric)
         menus[8].items = periphitems;
     }
 
+#ifdef __OPENGL_AVAILABLE__
+#if SDL_MAJOR_VERSION == 1
+#else
+    // Ré-active la fenêtre principale au cas où...
+    SDL_COMPAT_MakeCurrent(NULL, NULL);
+    SDL_COMPAT_RaiseWindow(NULL);
+#endif
+#endif
     return SDL_TRUE;
 }
 

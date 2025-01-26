@@ -35,9 +35,9 @@ SDL_bool periph_init_by_name(struct machine *oric, char *name);
 
 SDL_bool periph_init_all(struct machine *oric);
 
-Uint8 periph_read(struct machine *oric, Uint16 addr);
+Uint8 device_read(struct machine *oric, Uint16 addr); /* */
 
-SDL_bool periph_write(struct machine *oric, Uint16 addr, Uint8 data);
+SDL_bool device_write(struct machine *oric, Uint16 addr, Uint8 data); /* */
 
 SDL_bool device_printer(Uint8 data, SDL_bool rw);
 
@@ -45,28 +45,29 @@ int periph_find_by_name(char *name);
 
 int periph_find_by_addr(struct machine *oric, Uint16 addr);
 
-SDL_bool periph_present(struct machine *oric, Uint16 addr);
-SDL_bool periph_enabled_by_id(int id);
-SDL_bool mon_periph_enabled_by_id(int id);
+SDL_bool device_present(struct machine *oric, Uint16 addr); /* */
+SDL_bool device_enabled_by_id(int id); /* */
+SDL_bool mon_device_enabled_by_id(int id);
 
-void periph_list();
+void device_list(); /* */
 
 void periph_display(int i);
 
 
-Uint8 periph_mon_read(struct machine *oric, Uint16 addr);
+Uint8 device_mon_read(struct machine *oric, Uint16 addr); /* */
 
 void mon_update_periph( struct machine *oric, int id );
-int mon_periph_count();
+int mon_device_count(); /* */
 void toggleperiph( struct machine *oric, struct osdmenuitem *mitem, int id );
 void shut_periph(struct machine *oric);
 SDL_bool periph_shut_by_id(struct machine *oric, int id);
-SDL_bool periph_reset_all(struct machine *oric);
-SDL_bool periph_ticktock_all(struct machine *oric, int cycles);
+SDL_bool device_reset_all(struct machine *oric); /* */
+SDL_bool device_ticktock_all(struct machine *oric, int cycles); /* */
 void mon_store_state_periph(struct machine *oric, SDL_bool oldvalid);
-void mon_periph_oldvalid(SDL_bool oldvalid);
+void mon_device_oldvalid(SDL_bool oldvalid); /* */
 void mon_periphmod( int x, int y, int w, struct textzone *vtz );
+void device_sdl_event(SDL_Event *event); /* */
 
-SDL_bool periph_test(struct machine *oric);
+SDL_bool device_test(struct machine *oric); /* */
 SDL_bool load_devices_config(struct machine *oric);
 

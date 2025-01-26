@@ -292,5 +292,6 @@ struct PLUGIN plugin = { "STACK",
 		NULL,
                 mon_stack_update,
                 mon_stack_store,
+                NULL,
     };
 

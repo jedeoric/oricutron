@@ -1298,5 +1298,6 @@ struct PLUGIN plugin = { "DS1501",
                 ds1501_ticktock,
                 mon_ds1501_update,
                 mon_ds1501_store,
+                NULL,
     };
 

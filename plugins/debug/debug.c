@@ -260,5 +260,6 @@ struct PLUGIN plugin = { "DEBUG",
                 debug_ticktock,
                 mon_debug_update,
                 mon_debug_store,
+                NULL,
     };
 

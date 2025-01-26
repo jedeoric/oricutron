@@ -287,5 +287,6 @@ struct PLUGIN plugin = { "ROMDIS",
                 NULL,
                 mon_romdis_update,
                 mon_romdis_store,
+                NULL,
     };
 

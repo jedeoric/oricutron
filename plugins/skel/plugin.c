@@ -387,5 +387,6 @@ struct PLUGIN plugin = { "PLUGIN",
                 plugin_ticktock,
                 mon_plugin_update,
                 mon_plugin_store,
+                NULL,
     };
 
