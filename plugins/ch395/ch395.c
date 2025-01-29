@@ -167,20 +167,23 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
                 printf("Passerelle : %s\n", gateway_address);
 
                 // Récupérer les adresses associées à cette interface
-                if (getifaddrs(&ifaddr) == -1) {
+                if (getifaddrs(&ifaddr) == -1)
+                {
                     perror("getifaddrs");
                     fclose(route_file);
                     return EXIT_FAILURE;
                 }
 
-                for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-                    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
+                for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+                {
+                    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET)
+                    {
                         continue;
                     }
 
-                    if (strcmp(ifa->ifa_name, iface) == 0) {
+                    if (strcmp(ifa->ifa_name, iface) == 0)
+                    {
                         // Obtenir l'adresse IP en format lisible
-
                         struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
 
                         // Convertir le masque en format lisible
@@ -196,7 +199,8 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
 
                         struct sockaddr_in *addr_ip = (struct sockaddr_in *)ifa->ifa_addr;
 
-                        if (inet_ntop(AF_INET, &addr_ip->sin_addr, ip_address, INET_ADDRSTRLEN) != NULL) {
+                        if (inet_ntop(AF_INET, &addr_ip->sin_addr, ip_address, INET_ADDRSTRLEN) != NULL)
+                        {
                             printf("Adresse IP de l'interface %s : %s\n", iface, ip_address);
                             unsigned char *ip_by_bytes = (unsigned char *)&addr_ip->sin_addr.s_addr;
                             // Store IP
@@ -215,23 +219,28 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
 
                 // Lecture des serveurs DNS depuis /etc/resolv.conf
                 resolv_file = fopen(RESOLV_PATH, "r");
-                if (!resolv_file) {
+                if (!resolv_file)
+                {
                     perror("fileopen error : /etc/resolv.conf");
                     return EXIT_FAILURE;
                 }
 
                 printf("Serveurs DNS :\n");
                 int dns_count = 0;
-                while (fgets(line, sizeof(line), resolv_file)) {
-                    if (strncmp(line, "nameserver", 10) == 0) {
+                while (fgets(line, sizeof(line), resolv_file))
+                {
+                    if (strncmp(line, "nameserver", 10) == 0)
+                    {
                         char dns[INET_ADDRSTRLEN];
-                        if (sscanf(line, "nameserver %s", dns) == 1) {
+                        if (sscanf(line, "nameserver %s", dns) == 1)
+                        {
                             printf("- %s\n", dns);
 
                             // Extraire le 1er octet du serveur DNS
                             struct in_addr dns_addr;
                             inet_pton(AF_INET, dns, &dns_addr);
-                            if (dns_count == 0) {
+                            if (dns_count == 0)
+                            {
                                 dns1_first_octet = ((unsigned char *)&dns_addr.s_addr)[0];
                                 unsigned char *ip_by_bytes = (unsigned char *)&dns_addr.s_addr;
 
@@ -240,7 +249,8 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
                                 ch395->ip_chip[13] = ip_by_bytes[2];
                                 ch395->ip_chip[12] = ip_by_bytes[3];
 
-                            } else if (dns_count == 1) {
+                            } else if (dns_count == 1)
+                            {
                                 dns2_first_octet = ((unsigned char *)&dns_addr.s_addr)[0];
 
                                 unsigned char *ip_by_bytes = (unsigned char *)&dns_addr.s_addr;
@@ -258,11 +268,13 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
                 fclose(resolv_file);
 
                 // Afficher les 1ers octets
-                printf("1er octet de l'adresse IP de l'interface : %u\n", ip_first_octet);
-                if (dns1_first_octet != 0) {
+                printf("First byte of IP from interface : %u\n", ip_first_octet);
+                if (dns1_first_octet != 0)
+                {
                     printf("1er octet du 1er serveur DNS : %u\n", dns1_first_octet);
                 }
-                if (dns2_first_octet != 0) {
+                if (dns2_first_octet != 0)
+                {
                     printf("1er octet du 2ème serveur DNS : %u\n", dns2_first_octet);
                 }
 
@@ -273,7 +285,7 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
     }
 
     fclose(route_file);
-    printf("Aucune passerelle par défaut trouvée.\n");
+    printf("No gateway found.\n");
     return 1;
 }
 
@@ -294,17 +306,20 @@ int perform_recv_socket(struct ch395 *ch395, unsigned char socketid)
     int bytes_received = recv(ch395->sockfd_host[socketid], p, bytes_to_read_from_ch395, 0);
     printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
     dbg_printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
+
     if (bytes_received < 0)
     {
         perror("Erreur lors de la réception des données");
         return 1;
     }
+
     // Set flag recv
     printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socketid);
     dbg_printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socketid);
     ch395->socket_int_status[socketid] |= CH395_SINT_STAT_RECV;
     // Store the number of bytes received
     ch395->buffer_position_receive[socketid] = bytes_received;
+    return bytes_received;
 }
 
 
@@ -325,7 +340,8 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 
     snprintf(ip, sizeof(ip), "%u.%u.%u.%u", ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
     printf("%s %u.%u.%u.%u\n",ip, ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+    {
         perror("invalid IP adress ");
         return 1;
     }
@@ -334,16 +350,17 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
 
 
     //Se connecter au serveur
-    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
+    {
         perror("Erreur lors de la connexion au serveur");
         printf("erreur de la Connexion vers : %s:%d\n", ip, port);
         dbg_printf("erreur de la  Connexion vers : %s:%d\n", ip, port);
         return 1;
     }
 
-        printf("la Connexion semble établie vers : %s:%d\n",ip, port);
-        dbg_printf("la Connexion semble établie vers : %s:%d\n",ip, port);
-        ch395->socket_status_sn[socketid][1] = CH395_TCP_ESTABLISHED;
+    printf("la Connexion semble établie vers : %s:%d\n",ip, port);
+    dbg_printf("la Connexion semble établie vers : %s:%d\n",ip, port);
+    ch395->socket_status_sn[socketid][1] = CH395_TCP_ESTABLISHED;
 
     return 0;
 }
@@ -358,7 +375,7 @@ void ch395_init_internal(struct ch395 *ch395)
     //[Verified on real computer] If ch395 is not initialized (with init command) glob_int_status_all is set to 0 at boot
     ch395->glob_int_status_all[0] = 0;
     ch395->glob_int_status_all[1] = 0;
-    for(i=0;i<8;i++)
+    for(i=0; i<8; i++)
     {
         //ch395->socket_state[i] = CH395_SOCKET_CLOSED; // Socket state FIXME doublon
         //ch395->socket_proto[i] = CH395_TCP_CLOSED; // State protocol
@@ -453,6 +470,7 @@ unsigned int ch395_create(struct machine *oric)
 
 unsigned char ch395_read_command_port(struct ch395 *ch395, SDL_bool run)
 {
+    ch395 = ch395;
     if (!run)
         // Don't know if ch395 return command port
         return 0;
@@ -466,6 +484,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
     char msg[500];
     char *value;
     value = malloc(200);
+    run = run;
 
     switch(ch395->command)
     {
@@ -483,12 +502,14 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
         case CH395_CMD_GET_PHY_STATUS:
             ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_PHY_STATUS]");
             // If ch395 is not init, PHY_state is always disconnected
-            if (ch395->is_init == CH395_FALSE) {
+            if (ch395->is_init == CH395_FALSE)
+            {
                 printf("ch395 not init Cable disconnected\n");
                 dbg_printf("ch395 not init Cable disconnected\n");
                 data = CH395_PHY_DISCONN;
             }
-            else {
+            else
+            {
                 ch395->phy_state = CH395_PHY_100M_FLL;
                 printf("Return val %x Cable connected\n", ch395->phy_state);
                 dbg_printf("Return val %d Cable connected\n", ch395->phy_state);
@@ -501,11 +522,12 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
 
         case CH395_CMD_GET_IP_INF:
             ch395_debug_concat(">>[CH395][READ][DATA][CH395_CMD_GET_IP_INF]");
-            if (ch395->pos_rw_in_cmd_data  == 20) {
-                printf("CH395 PANIC impossible to read more than 4 bytes \n");
-                dbg_printf("CH395 PANIC impossible to read more than 4 bytes \n");
+            if (ch395->pos_rw_in_cmd_data  == 20)
+            {
+                ch395_debug_concat("CH395 PANIC impossible to read more than 4 bytes\n");
             }
-            else {
+            else
+            {
                 data = ch395->ip_chip[ch395->pos_rw_in_cmd_data];
                 ch395->pos_rw_in_cmd_data ++;
                 printf(" send : %d\n",data);
@@ -543,11 +565,13 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             break;
 
         case CH395_CMD_GET_MAC_ADDR:
-            if (ch395->nb_bytes_in_cmd_data == 6) {
-                printf("CH395 panic : impossible to read mac adress more than 6 bytes");
+            if (ch395->nb_bytes_in_cmd_data == 6)
+            {
+                ch395_debug_concat("CH395 panic : impossible to read mac adress more than 6 bytes");
                 data = 0;
             }
-            else {
+            else
+            {
                 data = ch395->mac_address[ch395->nb_bytes_in_cmd_data];
                 ch395->nb_bytes_in_cmd_data++;
             }
@@ -599,7 +623,7 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
                 dbg_printf("Socket: %d socket State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
             }
 
-            if ( ch395->pos_rw_in_cmd_data == 1 )
+            if (ch395->pos_rw_in_cmd_data == 1)
             {
                 data = ch395->socket_status_sn[ch395->cmd_data.CMD_SocketState[0]][1];
                 switch(data)
@@ -607,39 +631,50 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
                     case CH395_TCP_CLOSED:
                         strcpy(msg," TCP_CLOSED");
                         break;
+
                     case CH395_TCP_LISTEN:
                         strcpy(msg," TCP_LISTEN");
                         break;
+
                     case CH395_TCP_SYN_SENT:
                         strcpy(msg," TCP_SYN_SENT");
                         break;
+
                     case CH395_TCP_SYN_REVD:
                         strcpy(msg," TCP_SYN_REVD");
                         break;
+
                     case CH395_TCP_ESTABLISHED:
                         strcpy(msg," TCP_ESTABLISHED");
                         break;
+
                     case CH395_TCP_FIN_WAIT_1:
                         strcpy(msg," TCP_FIN_WAIT_1");
                         break;
+
                     case CH395_TCP_FIN_WAIT_2:
                         strcpy(msg," TCP_FIN_WAIT_2");
                         break;
+
                     case CH395_TCP_CLOSE_WAIT:
                         strcpy(msg," CLOSE_WAIT");
                         break;
+
                     case CH395_TCP_CLOSING:
                         strcpy(msg," TCP_CLOSING");
                         break;
+
                     case CH395_TCP_LAST_ACK:
                         strcpy(msg," LAST_ACK");
                         break;
+
                     case CH395_TCP_TIME_WAIT:
                         strcpy(msg," TCP_TIME_WAIT");
                         break;
-                default:
-                    strcpy(msg," Unknown protocol state");
-                    break;
+
+                    default:
+                        strcpy(msg," Unknown protocol state");
+                        break;
                 }
                 printf("Socket: %d socket  bla  protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
                 dbg_printf("Socket: %d socket bla protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
@@ -660,8 +695,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             1 GINT_STAT_IP_CONFLI IP conflict
             0 GINT_STAT_UNREACH Inaccessible interrupt
             */
-            printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS]");
-            dbg_printf("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS]");
+            ch395_debug_concat("<<[CH395][READ][DATA][CH395_CMD_GET_GLOB_INT_STATUS]");
+
 
             data = ch395->glob_int_status;
 
@@ -714,8 +749,6 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             }
 
             ch395_debug_concat("\n");
-
-
             break;
 
         case CH395_CMD_GET_INT_STATUS_SN: ;
@@ -781,17 +814,19 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
                     case 0:
                         ch395->glob_int_status |= CH395_GINT_STAT_SOCK0;
                         break;
+
                     case 1:
                         ch395->glob_int_status |= CH395_GINT_STAT_SOCK1;
                         break;
+
                     case 2:
                         ch395->glob_int_status |= CH395_GINT_STAT_SOCK2;
                         break;
+
                     case 3:
                         ch395->glob_int_status |= CH395_GINT_STAT_SOCK3;
                         break;
                 }
-
             }
 
             if (data & CH395_SINT_STAT_SENBUF_FREE)
@@ -1016,14 +1051,12 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             break;
 
         case CH395_CMD_GET_DHCP_STATUS:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_DHCP_STATUS]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_DHCP_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_DHCP_STATUS]\n");
             ch395->command = CH395_CMD_GET_DHCP_STATUS;
             break;
 
         case CH395_CMD_GET_IP_INF:
-            printf(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_IP_INF]\n");
-            dbg_printf("[CH395][WRITE][COMMAND][CH395_CMD_GET_IP_INF]\n");
+            ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_IP_INF]\n");
             ch395->command = CH395_CMD_GET_IP_INF;
             break;
 
@@ -1086,6 +1119,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_CNT] Not emulated\n");
             ch395->command = CH395_CMD_SET_KEEP_LIVE_CNT;
             break;
+
         case CH395_CMD_SET_KEEP_LIVE_SN:
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_SET_KEEP_LIVE_SN] Not emulated\n");
             ch395->command = CH395_CMD_SET_KEEP_LIVE_SN;
@@ -1119,7 +1153,6 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
         default:
             printf(">>[CH395][UNKNOWN_COMMAND]\n");
             break;
-
     }
 }
 
@@ -1128,7 +1161,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
     switch(ch395->command)
     {
-         case CH395_CMD_GET_IC_VER:
+        case CH395_CMD_GET_IC_VER:
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_IC_VER]\n");
             break;
 
@@ -1173,21 +1206,18 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
             break;
 
         case CH395_CMD_INIT:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_INIT][ERROR] INIT can not accepted data on data port!\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_INIT][ERROR] INIT can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_INIT][ERROR] INIT can not accepted data on data port!\n");
             break;
 
         case CH395_CMD_GET_UNREACH_IPPORT:
             break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_GLOB_INT_STATUS]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_GLOB_INT_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_GLOB_INT_STATUS]\n");
             break;
 
         case CH395_CMD_SET_RETRAN_COUNT:
@@ -1197,18 +1227,15 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_CMD_STATUS:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_CMD_STATUS]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_CMD_STATUS]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_CMD_STATUS]\n");
             break;
 
         case CH395_CMD_GET_REMOT_IPP_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_REMOT_IPP_SN]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_REMOT_IPP_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_REMOT_IPP_SN]\n");
             break;
 
         case CH395_CMD_CLEAR_RECV_BUF_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_CLEAR_RECV_BUF_SN]\n");
             break;
 
         case CH395_CMD_GET_SOCKET_STATUS_SN:
@@ -1223,10 +1250,10 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             }
             else
             {
-                printf("Error too much bytes into data port\n");
-                dbg_printf("Error too much bytes into data port\n");
+                ch395_debug_concat("Error too much bytes into data port\n");
+
             }
-            ch395->nb_bytes_in_cmd_data ++;
+            ch395->nb_bytes_in_cmd_data++;
             break;
 
         case CH395_CMD_GET_INT_STATUS_SN:
@@ -1240,7 +1267,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN] Socket : %d\n", data);
 
             ch395->cmd_data.CMD_SocketGetIntStatusSn[0] = data;
-            ch395->nb_bytes_in_cmd_data ++;
+            ch395->nb_bytes_in_cmd_data++;
 
             break;
 
@@ -1250,7 +1277,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data > 5)
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_IP_ADDR][ERROR] Too much data");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_IP_ADDR][ERROR] Too much data");
                 break;
             }
 
@@ -1269,16 +1296,15 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 ch395->socket_dest_ip[ch395->cmd_data.CMD_SocketSetIpAddr[0]][ch395->nb_bytes_in_cmd_data-1] = data;
             }
             // For errors detection we increment to test
-            ch395->nb_bytes_in_cmd_data ++;
+            ch395->nb_bytes_in_cmd_data++;
             break;
 
         case CH395_CMD_SET_DES_PORT_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN]");
 
             if (ch395->nb_bytes_in_cmd_data > 2)
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN][ERROR] Too much data");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN][ERROR] Too much data");
                 break;
             }
 
@@ -1299,8 +1325,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             }
             else
             {
-                printf("Dest port : %d\n",data);
-                dbg_printf("Dest port  : %d\n",data);
+                printf("Dest port : %d\n", data);
+                dbg_printf("Dest port  : %d\n", data);
                 // Store dest ip
                 ch395->socket_dest_port[ch395->cmd_data.CMD_SocketSetDesPort[0]][ch395->nb_bytes_in_cmd_data-1] = data;
 
@@ -1311,12 +1337,11 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_SET_SOUR_PORT_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN]");
 
             if (ch395->nb_bytes_in_cmd_data > 2)
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN][ERROR] Too much data");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN][ERROR] Too much data");
                 break;
             }
 
@@ -1330,7 +1355,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             else
             {
                 printf("Src port : %d\n",data);
-                dbg_printf("Scr port  : %d\n",data);
+                dbg_printf("Src port  : %d\n",data);
                 // Store dest ip
                 ch395->socket_src_port[ch395->cmd_data.CMD_SocketSetSrcPort[0]][ch395->nb_bytes_in_cmd_data-1] = data;
 
@@ -1338,20 +1363,19 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             // For errors detection we increment to test
             ch395->nb_bytes_in_cmd_data ++;
             break;
+
         case CH395_CMD_SET_PROTO_TYPE_SN:
             if (ch395->nb_bytes_in_cmd_data > 1)
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_PROTO_TYPE_SN][ERROR] Too much data");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_PROTO_TYPE_SN][ERROR] Too much data");
                 break;
             }
-
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_PROTO_TYPE_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_PROTO_TYPE_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_PROTO_TYPE_SN]");
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
-                printf("Selected socket : %d\n",data);
-                dbg_printf("Selected socket : %d\n",data);
+                printf("Selected socket : %d\n", data);
+                dbg_printf("Selected socket : %d\n", data);
 
                 // Set socket
                 ch395->cmd_data.CMD_SocketSetProto[0] = data;
@@ -1361,45 +1385,40 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             {
                 if (data == CH395_PROTO_TYPE_TCP)
                 {
-                    printf("Setting CH395_PROTO_TYPE_TCP\n");
-                    dbg_printf("Setting CH395_PROTO_TYPE_TCP\n");
+                    ch395_debug_concat("Setting CH395_PROTO_TYPE_TCP\n");
                     ch395->socket_proto[ch395->cmd_data.CMD_SocketSetProto[0]] = SOCK_STREAM;
                 }
 
                 if (data == CH395_PROTO_TYPE_UDP)
                 {
-                    printf("Setting CH395_PROTO_TYPE_UDP\n");
-                    dbg_printf("Setting CH395_PROTO_TYPE_UDP\n");
+                    ch395_debug_concat("Setting CH395_PROTO_TYPE_UDP\n");
                     ch395->socket_proto[ch395->cmd_data.CMD_SocketSetProto[0]] = SOCK_DGRAM;
                 }
 
                 if (data == CH395_PROTO_TYPE_MAC_RAW)
                 {
-                    printf("Setting CH395_PROTO_TYPE_MAC_RAW\n");
-                    dbg_printf("Setting CH395_PROTO_TYPE_MAC_RAW\n");
+                    ch395_debug_concat("Setting CH395_PROTO_TYPE_MAC_RAW\n");
                     ch395->socket_proto[ch395->cmd_data.CMD_SocketSetProto[0]] = SOCK_RAW;
                 }
 
                 if (data == CH395_PROTO_TYPE_IP_RAW)
                 {
-                    printf("Setting CH395_PROTO_TYPE_IP_RAW\n");
-                    dbg_printf("Setting CH395_PROTO_TYPE_IP_RAW\n");
+                    ch395_debug_concat("Setting CH395_PROTO_TYPE_IP_RAW\n");
                     ch395->socket_proto[ch395->cmd_data.CMD_SocketSetProto[0]] = SOCK_RAW;
                 }
                 // Store Proto into socket_proto
 
             }
             // For errors detection we increment to test
-            ch395->nb_bytes_in_cmd_data ++;
+            ch395->nb_bytes_in_cmd_data++;
             break;
 
         case CH395_CMD_OPEN_SOCKET_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_OPEN_SOCKET_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_OPEN_SOCKET_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_OPEN_SOCKET_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {   // opening socket
-                printf("Opening socket : %d\n",data);
-                dbg_printf("Opening socket : %d\n",data);
+                printf("Opening socket : %d\n", data);
+                dbg_printf("Opening socket : %d\n", data);
 
                 // Set socket
                 ch395->socket_status_sn[data][0] = CH395_SOCKET_OPEN;
@@ -1420,21 +1439,19 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             if (ch395->nb_bytes_in_cmd_data == 0)
             {   // opening socket
                 ch395->socket_proto[ch395->cmd_data.CMD_SocketTCPListenSn[0]] = data;
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n",data);
-                dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n",data);
+                printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n", data);
+                dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n", data);
             }
             else
             {
-                printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Error two much bytes");
-                dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Error two much bytes %d\n");
+                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Error two much bytes");
             }
 
             ch395->nb_bytes_in_cmd_data ++;
             break;
 
         case CH395_CMD_TCP_CONNECT_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_CONNECT_SN]");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_CONNECT_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_TCP_CONNECT_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
                 ch395->cmd_data.CMD_SocketState[0] = data;
@@ -1443,8 +1460,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             }
             else
             {
-                printf("Error too much bytes into data port\n");
-                dbg_printf("Error too much bytes into data port\n");
+                ch395_debug_concat("Error too much bytes into data port\n");
             }
             ch395->nb_bytes_in_cmd_data ++;
             int connect_error = perform_connect_socket(ch395, ch395->cmd_data.CMD_SocketWriteBuffer[0]);
@@ -1453,22 +1469,19 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             // Connect is OK, set CH395_SINT_STAT_CONNECT
             if (connect_error == 0)
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = CH395_SINT_STAT_CONNECT;
-
             break;
 
         case CH395_CMD_TCP_DISNCONNECT_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_DISNCONNECT_SN]\n");
-            dbg_printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_DISNCONNECT_SN]\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_TCP_DISNCONNECT_SN] NOT EMULATED\n");
             break;
 
         case CH395_CMD_WRITE_SEND_BUF_SN:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_WRITE_SEND_BUF_SN]");
-            dbg_printf(">>[CH395][WRITE][DATA][CH395_CMD_WRITE_SEND_BUF_SN]");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_WRITE_SEND_BUF_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
                 ch395->cmd_data.CMD_SocketWriteBuffer[0] = data;
-                printf("Socket : %d\n",data);
-                dbg_printf("Socket : %d\n",data);
+                printf("Socket : %d\n", data);
+                dbg_printf("Socket : %d\n", data);
                 ch395->nb_bytes_in_cmd_data ++;
                 break;
             }
@@ -1504,7 +1517,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 dbg_printf("value : %d/char %c\n", data, data);
             }
 
-            ch395->nb_bytes_in_cmd_data ++;
+            ch395->nb_bytes_in_cmd_data++;
             if (ch395->nb_bytes_in_cmd_data == ch395->socket_length_to_send[ch395->cmd_data.CMD_SocketWriteBuffer[0]] + 3 )
             {
                 // Send transmit buffer
@@ -1526,35 +1539,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketState[0]] | CH395_SINT_STAT_SEND_OK;
 
-                unsigned char socket = ch395->cmd_data.CMD_SocketWriteBuffer[0];
 
-/*
-                // Send recv
-                int bytes_to_read_from_ch395;
-
-                // Compute position of the buffer
-                // Get buffer offset
-                p = &ch395->buffer[ch395->transmit_buffer_start_block[socket] * CH395_SIZE_BLOCK_BUFFER];
-                // Read data from socket
-                // We will read into the buffer the size of the received buffer
-                // Compute the size
-                bytes_to_read_from_ch395 = ch395->receive_buffer_number_of_block[socket] * CH395_SIZE_BLOCK_BUFFER;
-                // And put the size in recv
-                int bytes_received = recv(ch395->sockfd_host[socket], p, bytes_to_read_from_ch395, 0);
-                printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
-                dbg_printf("[EMULATOR] Host read (recv) %d bytes (size of receive buffer for the socket) and received : %d bytes, ip : %d.%d.%d.%d\n", bytes_to_read_from_ch395, bytes_received, ch395->socket_dest_ip[socket][0], ch395->socket_dest_ip[socket][1],  ch395->socket_dest_ip[socket][2], ch395->socket_dest_ip[socket][3]);
-                if (bytes_received < 0)
-                {
-                    perror("Erreur lors de la réception des données");
-                    return 1;
-                }
-                // Set flag recv
-                printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socket);
-                dbg_printf("[EMULATOR] Setting CH395_SINT_STAT_RECV into socket %d\n", socket);
-                ch395->socket_int_status[socket] |= CH395_SINT_STAT_RECV;
-                // Store the number of bytes received
-                ch395->buffer_position_receive[socket] = bytes_received;
-*/
                 // Set irq flag for socket
                 switch (ch395->cmd_data.CMD_SocketWriteBuffer[0])
                 {
@@ -1610,8 +1595,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         break;
 
                 }
-
-
             }
             break;
 
@@ -1619,8 +1602,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
 
             ch395->cmd_data.CMD_SocketGetRecvLen[0] = data;
-            printf("Socket : %d\n",data);
-            dbg_printf("Socket : %d\n",data);
+            printf("Socket : %d\n", data);
+            dbg_printf("Socket : %d\n", data);
             ch395->nb_bytes_in_cmd_data ++;
             break;
 
@@ -1633,19 +1616,23 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     printf("Socket : %d\n",data);
                     dbg_printf("Socket : %d\n",data);
                     break;
+
                 case 1:
                     printf("low length : %d\n",data);
                     dbg_printf("low length : %d\n",data);
                     break;
+
                 case 2:
                     printf("high length %d\n",data);
                     dbg_printf("high length %d\n",data);
                     break;
+
                 default:
                     printf("Panic\n");
                     dbg_printf("Panic\n");
                     break;
             }
+
             if (ch395->nb_bytes_in_cmd_data < 4 )
             {
                 // Store the socket id + length (low) + length (high)
@@ -1660,7 +1647,6 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             printf(">>[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             close(ch395->sockfd_host[data]);
-
             break;
 
         case CH395_CMD_SET_IPRAW_PRO_SN:
@@ -1712,12 +1698,10 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_SET_TTL:
-
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_TTL]");
             switch(ch395->nb_bytes_in_cmd_data)
             {
                 case 0:
-
                     ch395->cmd_data.CMD_SocketTTL[0] = data;
                     printf("Setting socket : %d\n", data);
                     dbg_printf("%d\n",data);
@@ -1728,18 +1712,18 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     if (data > 128)
                     {
                         printf("PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n", data);
-                        dbg_printf("PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n",data);
+                        dbg_printf("PANIC : CH395_CMD_SET_TTL can not have a value greater than 128 received : %d\n", data);
                     }
                     else
                     {
-                        printf("socket : %d TTL : \n", ch395->cmd_data.CMD_SocketTTL[0], data);
+                        printf("socket : %d TTL : %d\n", ch395->cmd_data.CMD_SocketTTL[0], data);
                         ch395->socket_ttl[ch395->cmd_data.CMD_SocketTTL[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
                     break;
 
                 default:
-                    printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n",data);
+                    printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n", data);
                     dbg_printf("PANIC : CH395_CMD_SET_TTL can not receive 2 bytes on data port %d\n", data);
                     break;
 
@@ -1756,19 +1740,21 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     dbg_printf("%s %d\n", data);
                     ch395->pos_rw_in_cmd_data ++;
                     break;
+
                 case 1:
                     if (data > 48)
                     {
                         printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a start value greater than 48, received : %d\n", data);
-                        dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a start value greater than 48, received : %d\n",data);
+                        dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not have a start value greater than 48, received : %d\n", data);
                     }
                     else
                     {
-                        printf("socket : %d start_block : \n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
+                        printf("socket : %d start_block : %d\n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
                         ch395->receive_buffer_start_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
                     break;
+
                 case 3:
                     if (data > 48)
                     {
@@ -1777,14 +1763,14 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     }
                     else
                     {
-                        printf("socket : %d number block : \n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
+                        printf("socket : %d number block : %d\n", ch395->cmd_data.CMD_SocketSetRecvBuf[0], data);
                         ch395->receive_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetRecvBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
                     break;
 
                 default:
-                    printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n",data);
+                    printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n", data);
                     dbg_printf("PANIC : CH395_CMD_SET_RECV_BUF can not receive 3 bytes on data port %d\n", data);
                     break;
                 }
@@ -1800,6 +1786,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     dbg_printf("%s %d\n", data);
                     ch395->pos_rw_in_cmd_data ++;
                     break;
+
                 case 1:
                     if (data > 48)
                     {
@@ -1808,7 +1795,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     }
                     else
                     {
-                        printf("socket : %d start_block : \n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
+                        printf("socket : %d start_block : %d\n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
                         ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
@@ -1822,7 +1809,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                     }
                     else
                     {
-                        printf("socket : %d number block : \n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
+                        printf("socket : %d number block : %d\n", ch395->cmd_data.CMD_SocketSetSendBuf[0], data);
                         ch395->transmit_buffer_number_of_block[ch395->cmd_data.CMD_SocketSetSendBuf[0]] = data;
                         ch395->pos_rw_in_cmd_data ++;
                     }
@@ -1837,8 +1824,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_SET_FUN_PARA:
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA] Not emulated\n");
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA] Not emulated\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_FUN_PARA] Not emulated\n");
             break;
 
         case CH395_CMD_SET_KEEP_LIVE_IDLE:
@@ -1877,11 +1863,10 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 }
 
 
-Uint8  ch395_read(struct expansion_bus *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
+Uint8 ch395_read(struct expansion_bus *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, SDL_bool run)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
-
-
+    oric = oric; // gcc [-Wunused-parameter]
     if ( (!instance) || (instance > plugin_instances) )
         return (Uint8) 0;
 
@@ -1897,7 +1882,7 @@ Uint8  ch395_read(struct expansion_bus *oric, SDL_bool fBank, unsigned int insta
 SDL_bool ch395_write(struct expansion_bus *oric, SDL_bool fBank, unsigned int instance, Uint16 addr, Uint8 data)
 {
     fBank = fBank; // gcc [-Wunused-parameter]
-
+    oric = oric;  // gcc [-Wunused-parameter]
     if ( (!instance) || (instance > plugin_instances) )
         return SDL_FALSE;
 
@@ -1983,6 +1968,9 @@ SDL_bool plugin_init(void *tzprintfpos, void *tzputc, void *_mon_periphmod)
 // Called by init_machine and [F4]
 SDL_bool ch395_reset(struct expansion_bus *oric, unsigned int instance)
 {
+    oric = oric;
+    instance = instance;
+
     dbg_printf("CH395_reset(%d)\n", instance);
     return SDL_TRUE;
 }
@@ -2096,14 +2084,17 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
                 break;
         }
         pos_state += 8;
+
         switch(userdata[instance]->socket_status_sn[i][1])
         {
             case CH395_TCP_CLOSED:
                 my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_CLOSED");
                 break;
+
             case CH395_TCP_LISTEN:
                 my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_LISTEN");
                 break;
+
             case CH395_TCP_ESTABLISHED:
                 my_tzprintfpos( ptz, pos_state, 4 + i,  "TCP_ESTABL");
                 break;
@@ -2159,58 +2150,72 @@ void mon_ch395_update(struct textzone *ptz, unsigned int instance, Uint16 base_a
     pos_state += strlen("CMD_STATUS : ");
     switch(userdata[instance]->cmd_status)
     {
-
         case CH395_ERR_SUCCESS:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "SUCCESS");
             break;
+
         case CH395_ERR_BUSY:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Busy, the command is being executed");
             break;
+
         case CH395_ERR_MEM:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Memory Management error");
             break;
+
         case CH395_ERR_BUF:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Buffer error");
             break;
+
         case CH395_ERR_TIMEOUT:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Timeout");
             break;
+
         case CH395_ERR_RTE:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Route error");
             break;
+
         case CH395_ERR_ABRT:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection suspended");
             break;
+
         case CH395_ERR_RST:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection reset");
             break;
+
         case CH395_ERR_CLSD:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connection closed");
             break;
+
         case CH395_ERR_CONN:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "No connection");
             break;
+
         case CH395_ERR_VAL:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Value error");
             break;
+
         case CH395_ERR_ARG:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Parameter error");
             break;
+
         case CH395_ERR_USE:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Used");
             break;
+
         case CH395_ERR_IF:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "MAC error");
             break;
+
         case CH395_ERR_ISCONN:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Connected");
             break;
+
         case CH395_ERR_OPEN:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Opened");
             break;
+
         default:
             my_tzprintfpos( ptz, pos_state, 4 + i + 1,  "Status error (PANIC)");
-
     }
 
     pos_state = 1;
@@ -2268,7 +2273,6 @@ void mon_ch395_store(struct machine *oric, unsigned int instance)
         return;
 
     instance--;
-
 }
 
 // -----------------------------------------------------------------------------
@@ -2288,4 +2292,3 @@ struct PLUGIN plugin = { "ch395",
                 mon_ch395_store,
 		NULL
     };
-
