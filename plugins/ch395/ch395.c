@@ -678,8 +678,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
                         strcpy(msg," Unknown protocol state");
                         break;
                 }
-                printf("Socket: %d socket  bla  protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
-                dbg_printf("Socket: %d socket bla protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
+                printf("Socket: %d socket protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
+                dbg_printf("Socket: %d socket protocol State:%s\n", ch395->cmd_data.CMD_SocketState[0], msg);
             }
 
 
@@ -1651,7 +1651,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             close(ch395->sockfd_host[data]);
             ch395->socket_status_sn[ch395->sockfd_host[data]][0] = CH395_SOCKET_CLOSED;
-            ch395->socket_status_sn[ch395->sockfd_host[data]][1] = 0;
+            ch395->socket_status_sn[ch395->sockfd_host[data]][1] = CH395_TCP_CLOSED;
             ch395->cmd_status = ch395->cmd_status | CH395_ERR_SUCCESS;
             break;
 
