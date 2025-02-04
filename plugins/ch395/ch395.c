@@ -483,6 +483,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
     unsigned char data = 0xff;
     char msg[500];
     char *value;
+    unsigned char socket;
+
     value = malloc(200);
     run = run;
 
@@ -751,8 +753,8 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
             ch395_debug_concat("\n");
             break;
 
-        case CH395_CMD_GET_INT_STATUS_SN: ;
-            unsigned char socket = ch395->cmd_data.CMD_SocketGetIntStatusSn[0];
+        case CH395_CMD_GET_INT_STATUS_SN:
+            socket = ch395->cmd_data.CMD_SocketGetIntStatusSn[0];
             data = ch395->socket_int_status[socket];
             // When a socket is not open CH395_CMD_GET_INT_STATUS_SN command returns always 0 for socket state
             // Clear status
@@ -1178,7 +1180,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_RESET_ALL:
-            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_RESET_ALL][ERROR] RESET_ALL can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_RESET_ALL][ERROR] RESET_ALL can not accept any data on data port!\n");
             break;
 
         case CH395_CMD_SET_PHY:
@@ -1206,11 +1208,11 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             break;
 
         case CH395_CMD_GET_PHY_STATUS:
-            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_PHY_STATUS] can not accept any data on data port!\n");
             break;
 
         case CH395_CMD_INIT:
-            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_INIT][ERROR] INIT can not accepted data on data port!\n");
+            ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_INIT][ERROR] INIT can not accept any data on data port!\n");
             break;
 
         case CH395_CMD_GET_UNREACH_IPPORT:
@@ -1422,17 +1424,16 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
                 // Set socket
                 ch395->socket_status_sn[data][0] = CH395_SOCKET_OPEN;
-
-
                 ch395->sockfd_host[data] = socket(AF_INET, ch395->socket_proto[data], 0);
+
                 if (ch395->sockfd_host[data] < 0)
                 {
                     printf("Erreur lors de la création du socket %d", data);
                     dbg_printf("Erreur lors de la création du socket %d", data);
                     return 1;
                 }
-            }
 
+            }
             break;
 
         case CH395_CMD_TCP_LISTEN_SN:
@@ -1452,6 +1453,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
         case CH395_CMD_TCP_CONNECT_SN:
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_TCP_CONNECT_SN]");
+
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
                 ch395->cmd_data.CMD_SocketState[0] = data;
@@ -1462,6 +1464,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             {
                 ch395_debug_concat("Error too much bytes into data port\n");
             }
+
             ch395->nb_bytes_in_cmd_data ++;
             int connect_error = perform_connect_socket(ch395, ch395->cmd_data.CMD_SocketWriteBuffer[0]);
             printf("Launching connect from socket %d\n", ch395->cmd_data.CMD_SocketWriteBuffer[0]);
@@ -1647,17 +1650,22 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             printf(">>[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             close(ch395->sockfd_host[data]);
+            ch395->socket_status_sn[ch395->sockfd_host[data]][0] = CH395_SOCKET_CLOSED;
+            ch395->socket_status_sn[ch395->sockfd_host[data]][1] = 0;
+            ch395->cmd_status = ch395->cmd_status | CH395_ERR_SUCCESS;
             break;
 
         case CH395_CMD_SET_IPRAW_PRO_SN:
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_IPRAW_PRO_SN]");
 
-            if  (ch395->pos_rw_in_cmd_data == 0) {
+            if  (ch395->pos_rw_in_cmd_data == 0)
+            {
                 printf("socket %d\n", data);
                 dbg_printf("socket %d\n", data);
                 ch395->pos_rw_in_cmd_data ++;
             }
-            else {
+            else
+            {
                 char *msg_panic = "PANIC : CH395_CMD_SET_IPRAW_PRO_SN can not receive 2 bytes on data port";
                 printf("%s socket %d\n", msg_panic, data);
                 dbg_printf("%s socket %d\n", msg_panic, data);
