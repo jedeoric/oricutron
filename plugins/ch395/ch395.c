@@ -1567,6 +1567,10 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
 //  ssize_t sent_bytes = sendto(sock, MESSAGE, strlen(MESSAGE), 0,
 //                                 (struct sockaddr *)&server_addr, sizeof(server_addr));
+/*
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, socklen_t addrlen);
+               */
                     // UDP !!! Send buffer (p is the adress of the position of transmit_buffer)
                     if (sendto(
                         ch395->sockfd_host[socketid], // Sock
@@ -1574,7 +1578,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         ch395->socket_length_to_send[ch395->cmd_data.CMD_SocketWriteBuffer[0]], // Length to send
                         0,
                         (struct sockaddr *)&server_addr, // Adress of the server
-                        sizeof(&server_addr) // Sizeof
+                        sizeof(server_addr) // Sizeof
                     ) < 0)
                     {
                         perror("Erreur lors de l'envoi de la requête (UDP)");
