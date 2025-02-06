@@ -854,6 +854,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
     switch(command)
     {
         case CH395_CMD_GET_IC_VER:
+            ch395->command = CH395_CMD_GET_IC_VER;
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_IC_VER]\n");
             break;
 
@@ -925,6 +926,7 @@ void ch395_write_command_port(struct ch395 *ch395, uint8_t command)
 
         case CH395_CMD_GET_UNREACH_IPPORT:
             ch395_debug_concat(">>[CH395][WRITE][COMMAND][CH395_CMD_GET_UNREACH_IPPORT] Command not supported in current emulation\n");
+            ch395->command = CH395_CMD_GET_UNREACH_IPPORT;
             break;
 
         case CH395_CMD_GET_GLOB_INT_STATUS:
@@ -1169,8 +1171,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
         case CH395_CMD_CHECK_EXIST:
             ch395->cmd_data.CMD_CheckByte = ~data;
-            printf(">>[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x \n",data, ch395->cmd_data.CMD_CheckByte);
-            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x \n",data, ch395->cmd_data.CMD_CheckByte);
+            printf(">>[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x\n",data, ch395->cmd_data.CMD_CheckByte);
+            dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CHECK_EXIST] check byte received : 0x%02x convert : 0x%02x\n",data, ch395->cmd_data.CMD_CheckByte);
             break;
 
         case CH395_CMD_SET_BAUDRATE:
@@ -1527,13 +1529,58 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 // Get the position of the buffer
                 void *p = &ch395->buffer[ch395->transmit_buffer_start_block[ch395->cmd_data.CMD_SocketWriteBuffer[0]]*CH395_SIZE_BLOCK_BUFFER];
 
-                // Send buffer (p is the adress of the position of transmit_buffer)
-                if (send(ch395->sockfd_host[ch395->cmd_data.CMD_SocketWriteBuffer[0]], p, ch395->socket_length_to_send[ch395->cmd_data.CMD_SocketWriteBuffer[0]], 0) < 0)
+
+
+                if (ch395->socket_proto[ch395->cmd_data.CMD_SocketWriteBuffer[0]] == SOCK_STREAM)
                 {
-                    perror("Erreur lors de l'envoi de la requête");
-                    return 1;
+                    // TCP !!! Send buffer (p is the adress of the position of transmit_buffer)
+                    if (send(ch395->sockfd_host[ch395->cmd_data.CMD_SocketWriteBuffer[0]], p, ch395->socket_length_to_send[ch395->cmd_data.CMD_SocketWriteBuffer[0]], 0) < 0)
+                    {
+                        perror("Erreur lors de l'envoi de la requête");
+                        return 1;
+                    }
                 }
 
+                else if (ch395->socket_proto[ch395->cmd_data.CMD_SocketWriteBuffer[0]] == SOCK_DGRAM)
+                {
+                    char ip[16]; // 16 pour contenir l'IP au format "xxx.xxx.xxx.xxx\"
+                    struct sockaddr_in server_addr;
+                    int socketid = ch395->cmd_data.CMD_SocketWriteBuffer[0];
+
+
+                    // Configurer l'adresse du serveur
+                    server_addr.sin_family = AF_INET;
+
+                    int port = ch395->socket_dest_port[socketid][0] + ch395->socket_dest_port[socketid][1]*256;
+                    server_addr.sin_port = htons(port); // Port par défaut pour HTTP
+
+                    snprintf(ip, sizeof(ip), "%u.%u.%u.%u", ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
+                    printf("%s %u.%u.%u.%u\n",ip, ch395->socket_dest_ip[socketid][0], ch395->socket_dest_ip[socketid][1], ch395->socket_dest_ip[socketid][2], ch395->socket_dest_ip[socketid][3]);
+                    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+                    {
+                        perror("invalid IP adress ");
+                        return 1;
+                    }
+
+                    printf("[EMULATOR][UDP] Connection to : %s:%d\n",ip, port);
+                    dbg_printf("[EMULATOR][UDP] Connection to : %s:%d\n",ip, port);
+
+//  ssize_t sent_bytes = sendto(sock, MESSAGE, strlen(MESSAGE), 0,
+//                                 (struct sockaddr *)&server_addr, sizeof(server_addr));
+                    // UDP !!! Send buffer (p is the adress of the position of transmit_buffer)
+                    if (sendto(
+                        ch395->sockfd_host[socketid], // Sock
+                        p, // Buffer to send
+                        ch395->socket_length_to_send[ch395->cmd_data.CMD_SocketWriteBuffer[0]], // Length to send
+                        0,
+                        (struct sockaddr *)&server_addr, // Adress of the server
+                        sizeof(&server_addr) // Sizeof
+                    ) < 0)
+                    {
+                        perror("Erreur lors de l'envoi de la requête (UDP)");
+                        return 1;
+                    }
+                }
                 // Set SINT_STAT_SEND_OK
                 ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]] = ch395->socket_int_status[ch395->cmd_data.CMD_SocketWriteBuffer[0]]  | CH395_SINT_STAT_SENBUF_FREE;
 
@@ -1880,8 +1927,11 @@ Uint8 ch395_read(struct expansion_bus *oric, SDL_bool fBank, unsigned int instan
 
     instance--;
 
-    if (addr == 0x00) return ch395_read_data_port(userdata[instance], run);
-    if (addr == 0x01) return ch395_read_command_port(userdata[instance], run);
+    if (run)
+    {
+        if (addr == 0x00) return ch395_read_data_port(userdata[instance], run);
+        if (addr == 0x01) return ch395_read_command_port(userdata[instance], run);
+    }
 
     return 0;
 
