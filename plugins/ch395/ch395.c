@@ -117,6 +117,83 @@ extern struct Library *SysBase;
 unsigned int plugin_instances = 0;
 
 
+int ch395_check_socket(unsigned char socket, struct ch395 *ch395)
+{
+    if (socket > 7)
+    {
+        printf("Invalid socket %d : must be set from 0 to 7\n", socket);
+        dbg_printf("Invalid socket %d : must be set from 0 to 7\n", socket);
+        return 1;
+    }
+    return 0;
+/*
+    if (ch395->socket_state[socket] == CH395_SOCK_CLOSED)
+    {
+        printf("Socket %d fermé\n", socket);
+        dbg_printf("Socket %d fermé\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_LISTEN)
+    {
+        printf("Socket %d en écoute\n", socket);
+        dbg_printf("Socket %d en écoute\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_SYNSENT)
+    {
+        printf("Socket %d en SYNSENT\n", socket);
+        dbg_printf("Socket %d en SYNSENT\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_SYNRECV)
+    {
+        printf("Socket %d en SYNRECV\n", socket);
+        dbg_printf("Socket %d en SYNRECV\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_ESTABLISHED)
+    {
+        printf("Socket %d établi\n", socket);
+        dbg_printf("Socket %d établi\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_FINWAIT)
+    {
+        printf("Socket %d en FINWAIT\n", socket);
+        dbg_printf("Socket %d en FINWAIT\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_CLOSING)
+    {
+        printf("Socket %d en CLOSING\n", socket);
+        dbg_printf("Socket %d en CLOSING\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_TIMEWAIT)
+    {
+        printf("Socket %d en TIMEWAIT\n", socket);
+        dbg_printf("Socket %d en TIMEWAIT\n", socket);
+        return;
+    }
+
+    if (ch395->socket_state[socket] == CH395_SOCK_CLOSEWAIT)
+    {
+        printf("Socket %d en CLOSEWAIT\n", socket);
+        dbg_printf("Socket %d en CLOSEWAIT\n", socket);
+        return;
+    }
+    */
+
+}
+
+
 void ch395_debug_concat(char *msg)
 {
     printf("%s", msg);
@@ -1248,6 +1325,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 ch395->cmd_data.CMD_SocketState[0] = data;
                 printf(" Socket : %d\n", data);
                 dbg_printf(" Socket : %d\n", data);
@@ -1267,6 +1345,9 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                 ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN][ERROR] Accept only one byte (data already sent)\n");
                 break;
             }
+
+            if (ch395_check_socket(data, ch395) == 1) return 1;
+
             printf(">>[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN] Socket : %d\n", data);
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_GET_INT_STATUS_SN] Socket : %d\n", data);
 
@@ -1287,6 +1368,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 printf("Socket : %d\n",data);
                 dbg_printf("Socket %d\n",data);
                 // Set socket
@@ -1308,24 +1390,19 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data > 2)
             {
-                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_DES_PORT_SN][ERROR] Too much data");
+                ch395_debug_concat("[ERROR] Too much data");
                 break;
             }
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
-                if (data > 7)
-                {
-                    printf("Error Socket impossible to have %d id (must be between 0 and 7)\n",data);
-                    dbg_printf("Error Socket impossible to have %d id (must be between 0 and 7)\n",data);
-                }
-                else
-                {
-                    printf("Socket : %d\n",data);
-                    dbg_printf("Socket %d\n",data);
-                    // Set socket
-                    ch395->cmd_data.CMD_SocketSetDesPort[0] = data;
-                }
+                if (ch395_check_socket(data, ch395) == 1) return 1;
+
+                printf("Socket : %d\n",data);
+                dbg_printf("Socket %d\n",data);
+                // Set socket
+                ch395->cmd_data.CMD_SocketSetDesPort[0] = data;
+
             }
             else
             {
@@ -1345,12 +1422,13 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data > 2)
             {
-                ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_SET_SOUR_PORT_SN][ERROR] Too much data");
+                ch395_debug_concat("[ERROR] Too much data");
                 break;
             }
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 printf("Socket : %d\n",data);
                 dbg_printf("Socket %d\n",data);
                 // Set socket
@@ -1378,6 +1456,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 printf("Selected socket : %d\n", data);
                 dbg_printf("Selected socket : %d\n", data);
 
@@ -1421,6 +1500,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_OPEN_SOCKET_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {   // opening socket
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 printf("Opening socket : %d\n", data);
                 dbg_printf("Opening socket : %d\n", data);
 
@@ -1441,6 +1521,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
         case CH395_CMD_TCP_LISTEN_SN:
             if (ch395->nb_bytes_in_cmd_data == 0)
             {   // opening socket
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 ch395->socket_proto[ch395->cmd_data.CMD_SocketTCPListenSn[0]] = data;
                 printf(">>[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n", data);
                 dbg_printf("[CH395][WRITE][DATA][CH395_CMD_TCP_LISTEN_SN] Selected socket : %d\n", data);
@@ -1458,6 +1539,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
 
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 ch395->cmd_data.CMD_SocketState[0] = data;
                 printf("Connecting socket %d ...\n", data);
                 dbg_printf(" Connecting socket %d ...\n", data);
@@ -1484,6 +1566,7 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_WRITE_SEND_BUF_SN]");
             if (ch395->nb_bytes_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 ch395->cmd_data.CMD_SocketWriteBuffer[0] = data;
                 printf("Socket : %d\n", data);
                 dbg_printf("Socket : %d\n", data);
@@ -1654,7 +1737,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
         case CH395_CMD_GET_RECV_LEN_SN:
             ch395_debug_concat(">>[CH395][WRITE][DATA][CH395_CMD_GET_RECV_LEN_SN]");
-
+            if (ch395_check_socket(data, ch395) == 1) return 1;
             ch395->cmd_data.CMD_SocketGetRecvLen[0] = data;
             printf("Socket : %d\n", data);
             dbg_printf("Socket : %d\n", data);
@@ -1667,6 +1750,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             switch(ch395->nb_bytes_in_cmd_data)
             {
                 case 0:
+                    if (ch395_check_socket(data, ch395) == 1) return 1;
                     printf("Socket : %d\n",data);
                     dbg_printf("Socket : %d\n",data);
                     break;
@@ -1700,6 +1784,9 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         case CH395_CMD_CLOSE_SOCKET_SN:
             printf(">>[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
             dbg_printf("[CH395][WRITE][DATA][CH395_CMD_CLOSE_SOCKET_SN] Socket %d\n", data);
+
+            if (ch395_check_socket(data, ch395) == 1) return 1;
+
             close(ch395->sockfd_host[data]);
             ch395->socket_status_sn[ch395->sockfd_host[data]][0] = CH395_SOCKET_CLOSED;
             ch395->socket_status_sn[ch395->sockfd_host[data]][1] = CH395_TCP_CLOSED;
@@ -1711,6 +1798,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
             if  (ch395->pos_rw_in_cmd_data == 0)
             {
+                if (ch395_check_socket(data, ch395) == 1) break;
                 printf("socket %d\n", data);
                 dbg_printf("socket %d\n", data);
                 ch395->pos_rw_in_cmd_data ++;
@@ -1761,6 +1849,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             switch(ch395->nb_bytes_in_cmd_data)
             {
                 case 0:
+                    if (ch395_check_socket(data, ch395) == 1) return 1;
                     ch395->cmd_data.CMD_SocketTTL[0] = data;
                     printf("Setting socket : %d\n", data);
                     dbg_printf("%d\n",data);
@@ -1794,6 +1883,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             switch(ch395->nb_bytes_in_cmd_data)
             {
                 case 0:
+                    if (ch395_check_socket(data, ch395) == 1) return 1;
                     ch395->cmd_data.CMD_SocketSetRecvBuf[0] = data;
                     printf("Setting socket : %d\n", data);
                     dbg_printf("%s %d\n", data);
@@ -1840,6 +1930,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             switch(ch395->nb_bytes_in_cmd_data)
             {
                 case 0:
+                    if (ch395_check_socket(data, ch395) == 1) return 1;
                     ch395->cmd_data.CMD_SocketSetSendBuf[0] = data;
                     printf("Setting socket : %d\n", data);
                     dbg_printf("%s %d\n", data);
