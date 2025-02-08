@@ -1501,8 +1501,8 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
             if (ch395->nb_bytes_in_cmd_data == 0)
             {   // opening socket
                 if (ch395_check_socket(data, ch395) == 1) return 1;
-                printf("Opening socket : %d\n", data);
-                dbg_printf("Opening socket : %d\n", data);
+                printf("Opening socket : %d proto : %d\n", data, ch395->socket_proto[data]);
+                dbg_printf("Opening socket : %d proto : %d\n", data, ch395->socket_proto[data]);
 
                 // Set socket
                 ch395->socket_status_sn[data][0] = CH395_SOCKET_OPEN;
@@ -1645,15 +1645,10 @@ int ch395_write_data_port(struct ch395 *ch395, uint8_t data)
                         return 1;
                     }
 
-                    printf("[EMULATOR][UDP] Connection to : %s:%d\n",ip, port);
-                    dbg_printf("[EMULATOR][UDP] Connection to : %s:%d\n",ip, port);
+                    printf("[EMULATOR][UDP] Connection to : %s:%d with sockfd_host : %d\n",ip, port, ch395->sockfd_host[socketid]);
+                    dbg_printf("[EMULATOR][UDP] Connection to : %s:%d with sockfd_host : %d\n",ip, port, ch395->sockfd_host[socketid]);
 
-//  ssize_t sent_bytes = sendto(sock, MESSAGE, strlen(MESSAGE), 0,
-//                                 (struct sockaddr *)&server_addr, sizeof(server_addr));
-/*
-ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
-               const struct sockaddr *dest_addr, socklen_t addrlen);
-               */
+
                     // UDP !!! Send buffer (p is the adress of the position of transmit_buffer)
                     if (sendto(
                         ch395->sockfd_host[socketid], // Sock
@@ -1788,9 +1783,11 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             if (ch395_check_socket(data, ch395) == 1) return 1;
 
             close(ch395->sockfd_host[data]);
-            ch395->socket_status_sn[ch395->sockfd_host[data]][0] = CH395_SOCKET_CLOSED;
-            ch395->socket_status_sn[ch395->sockfd_host[data]][1] = CH395_TCP_CLOSED;
+            ch395->socket_status_sn[data][0] = CH395_SOCKET_CLOSED;
+            ch395->socket_status_sn[data][1] = CH395_TCP_CLOSED;
+
             ch395->cmd_status = ch395->cmd_status | CH395_ERR_SUCCESS;
+            ch395->sockfd_host[data] = 0;
             break;
 
         case CH395_CMD_SET_IPRAW_PRO_SN:
@@ -1798,7 +1795,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
             if  (ch395->pos_rw_in_cmd_data == 0)
             {
-                if (ch395_check_socket(data, ch395) == 1) break;
+                if (ch395_check_socket(data, ch395) == 1) return 1;
                 printf("socket %d\n", data);
                 dbg_printf("socket %d\n", data);
                 ch395->pos_rw_in_cmd_data ++;
