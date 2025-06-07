@@ -1538,16 +1538,13 @@ static int check_char(char c)
         case '/':
             return c;
 
-        // Allowed here to also alow pattern matching
+        // Allowed here to also allow pattern matching
         case '*':
             return c;
 
         default:
             if((c >='A' && c <='Z') || (c >= 128 && c <= 228) || c >= 230)
                 return c;
-
-            // if(c >='a' && c <='z')
-            //     return c - ('a' - 'A');
 
             return -1;
     }
