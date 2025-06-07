@@ -190,7 +190,6 @@ int ch395_check_socket(unsigned char socket, struct ch395 *ch395)
         return;
     }
     */
-
 }
 
 
@@ -198,7 +197,6 @@ void ch395_debug_concat(char *msg)
 {
     printf("%s", msg);
     dbg_printf("%s", msg);
-
 }
 
 int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
@@ -369,9 +367,9 @@ int ch395_fill_get_ip_inf_linux(struct ch395 *ch395)
 int perform_recv_socket(struct ch395 *ch395, unsigned char socketid)
 {
     void *p;
+
     // Send recv
     int bytes_to_read_from_ch395;
-    //unsigned char socket = ch395->cmd_data.CMD_SocketWriteBuffer[0];
 
     if (ch395->sockfd_host[socketid] == 0)
     {
@@ -395,7 +393,6 @@ int perform_recv_socket(struct ch395 *ch395, unsigned char socketid)
 
     if (bytes_received == 0)
         return 0;
-    //printf("")
 
     if (bytes_received == -1)
     {
@@ -467,14 +464,9 @@ int perform_recv_socket(struct ch395 *ch395, unsigned char socketid)
                 break;
         }
 
-
-
-        //glob_int_status
         // Store the number of bytes received
         ch395->socket_length_received[socketid] = bytes_received;
-        //ch395->buffer_position_receive[socketid] = bytes_received;
         return bytes_received;
-
     }
 
 }
@@ -505,20 +497,11 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
     printf("Connection to : %s:%d\n",ip, port);
     dbg_printf("Connection to : %s:%d\n",ip, port);
 
-    // char unpacked_ip[INET_ADDRSTRLEN];
-    // if (inet_ntop(AF_INET, &packed_ip, ip, INET_ADDRSTRLEN) == NULL) {
-    //     perror("inet_ntop");
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // printf("Unpacked IP: %s\n", unpacked_ip);
-
     //Se connecter au serveur
     if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0)
     {
-        perror("[EMULATOR] Erreur lors de la connexion au serveur");
-        printf("[EMULATOR] erreur de la Connexion vers : %s:%d socket %d\n", ip, port, sockfd);
-        dbg_printf("[EMULATOR] erreur de la Connexion vers : %s:%d socket %d\n", ip, port, sockfd);
+        printf("[EMULATOR] Connection error : %s:%d socket %d\n", ip, port, sockfd);
+        dbg_printf("[EMULATOR] Connection error : %s:%d socket %d\n", ip, port, sockfd);
         return 1;
     }
     // For SOCK_STREAM NON blocking mode must be AFTER connect
@@ -529,8 +512,8 @@ int perform_connect_socket(struct ch395 *ch395, unsigned char socketid)
         exit(EXIT_FAILURE);
     }
 
-    printf("la Connexion établie vers : %s:%d\n",ip, port);
-    dbg_printf("la Connexion établie vers : %s:%d\n",ip, port);
+    printf("Connection established : %s:%d\n",ip, port);
+    dbg_printf("Connection established : %s:%d\n",ip, port);
     ch395->socket_status_sn[socketid][1] = CH395_TCP_ESTABLISHED;
 
     return 0;
@@ -548,8 +531,6 @@ void ch395_init_internal(struct ch395 *ch395)
     ch395->glob_int_status_all[1] = 0;
     for(i=0; i<8; i++)
     {
-        //ch395->socket_state[i] = CH395_SOCKET_CLOSED; // Socket state FIXME doublon
-        //ch395->socket_proto[i] = CH395_TCP_CLOSED; // State protocol
         ch395->socket_status_sn[i][0] = CH395_SOCKET_CLOSED; // State protocol
         ch395->socket_status_sn[i][1] = CH395_TCP_CLOSED; // State protocol
         ch395->socket_int_status[i] = CH395_SINT_STAT_DISCONNECT; //Socket state
@@ -691,7 +672,6 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
                 data = ch395->phy_state;
                 // The next call, we set CH395_PHY_100M_FLL. FIXME : in order to be correct, it should test network host stack
                 // Depending of the network when the oric is connected, this value should not be this, but we set this now
-
             }
             break;
 
@@ -920,22 +900,17 @@ unsigned char ch395_read_data_port(struct ch395 *ch395, SDL_bool run)
 
         case CH395_CMD_GET_INT_STATUS_SN:
             socket = ch395->cmd_data.CMD_SocketGetIntStatusSn[0];
-            //data = ch395->socket_int_status[socket];
             // When a socket is not open CH395_CMD_GET_INT_STATUS_SN command returns always 0 for socket state
             // Clear status
             // Each time CH395_CMD_GET_INT_STATUS_SN is read, we reset necessary status
 
-            // if (ch395->socket_length_received[socket] == 0)
-            // {
             nb_bytes_read = perform_recv_socket(ch395, socket);
             if (nb_bytes_read >= 0)
             {
                 printf("Something received\n");
                 dbg_printf("Something received\n");
             }
-            // }
             data = ch395->socket_int_status[socket];
-
 
             strcpy(msg,"");
 

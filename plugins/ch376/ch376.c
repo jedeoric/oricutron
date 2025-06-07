@@ -326,6 +326,8 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 
 /* /// "Amiga system functions" */
 
+#define DEBUG_CH376 1
+
 #ifdef DEBUG_CH376
 #include <clib/debug_protos.h>
 #define dbg_printf kprintf
@@ -1516,14 +1518,50 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 
 /* /// "CH376 private subroutines" */
 
+static int check_char(char c)
+{
+    switch(c)
+    {
+        case ' ':
+        case '!': case '#': case '$':
+        case '%': case '&': case '\'':
+        case '(': case ')': case '-':
+        case '@': case '^': case '_':
+        case '`': case '{': case '}':
+        case '~': case '+':
+        case '0': case '1': case '2':
+        case '3': case '4': case '5':
+        case '6': case '7': case '8':
+        case '9':
+        case 0: // EOS
+        case '/':
+            return c;
+
+        // Allowed here to also alow pattern matching
+        case '*':
+            return c;
+
+        default:
+            if((c >='A' && c <='Z') || (c >= 128 && c <= 228) || c >= 230)
+                return c;
+
+            // if(c >='a' && c <='z')
+            //     return c - ('a' - 'A');
+
+            return -1;
+    }
+}
+
+
 static char *clone_string(const char *string)
 {
     int l;
     char *s;
 
+
     for(l=0; string[l]!='\0'; l++);
 
-    s = system_alloc_mem(l);
+    s = system_alloc_mem(l+1);
 
     for(l=0; string[l]!='\0'; l++)
         s[l] = string[l];
@@ -2024,12 +2062,12 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
         cancel_all_io(ch376);
         // If directory is available, we consider that it's mounted!
         if(ch376->usb_mode == CH376_ARG_SET_USB_MODE_SD_HOST)
-	{
+        {
             ch376->root_dir_lock = system_obtain_directory_lock(&ch376->context, ch376->sdcard_drive_path, NULL);
             // ch376->current_dir_lock = system_clone_directory_lock(&ch376->context, ch376->root_dir_lock);
-	}
+        }
         else if(ch376->usb_mode == CH376_ARG_SET_USB_MODE_USB_HOST)
-	{
+{
             ch376->root_dir_lock = system_obtain_directory_lock(&ch376->context, ch376->usb_drive_path, NULL);
             // ch376->current_dir_lock = system_clone_directory_lock(&ch376->context, ch376->root_dir_lock);
 	}
@@ -2105,6 +2143,15 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
         {
             int i = 0;
 
+            if (check_char(ch376->cmd_data.CMD_FileName[i]) == -1)
+            {
+                dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[i]);
+                printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[i]);
+                ch376->interface_status = 0;
+                ch376->command_status = CH376_RET_ABORT;
+                return 0;
+            }
+
             // back to root?
             if(ch376->cmd_data.CMD_FileName[i] == '/')
             {
@@ -2126,17 +2173,17 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
                 // wildcard?
                 if(strchr(ch376->cmd_data.CMD_FileName,'*') || strchr(ch376->cmd_data.CMD_FileName,'?'))
                 {
-		    // Directory?
-		    if (ch376->current_file_is_directory)
-		    {
-                    dbg_printf("[WRITE][COMMAND][CH376_CMD_FILE_OPEN] examining directory contents\n");
-                    // Start a directory examine session
-                    system_finish_examine_directory(&ch376->context, ch376->current_directory_browsing);
-                    ch376->current_directory_browsing = system_start_examine_directory(&ch376->context, ch376->current_dir_lock);
-                    normalize_pattern(ch376->cmd_data.CMD_FileName, ch376->dir_pattern);
+                    // Directory?
+                    if (ch376->current_file_is_directory)
+                    {
+                            dbg_printf("[WRITE][COMMAND][CH376_CMD_FILE_OPEN] examining directory contents\n");
+                            // Start a directory examine session
+                            system_finish_examine_directory(&ch376->context, ch376->current_directory_browsing);
+                            ch376->current_directory_browsing = system_start_examine_directory(&ch376->context, ch376->current_dir_lock);
+                            normalize_pattern(ch376->cmd_data.CMD_FileName, ch376->dir_pattern);
 
-                    goto file_enum_go;
-		    }
+                            goto file_enum_go;
+                    }
 
                     dbg_printf("[WRITE][COMMAND][CH376_CMD_FILE_OPEN] examining directory contents: not a directory\n");
                     ch376->interface_status = 0;
