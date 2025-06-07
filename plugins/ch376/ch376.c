@@ -326,6 +326,8 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 
 /* /// "Amiga system functions" */
 
+#define DEBUG_CH376 1
+
 #ifdef DEBUG_CH376
 #include <clib/debug_protos.h>
 #define dbg_printf kprintf
@@ -2150,7 +2152,16 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
                 return 0;
             }
 
-            // back to root?
+            if (strlen(ch376->cmd_data.CMD_FileName) > 8+3+1+1) // 8.3 + EOS
+            {
+                printf("String for CH376_CMD_FILE_OPEN is too long : %s\n", ch376->cmd_data.CMD_FileName);
+                dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: file name too long\n");
+                ch376->interface_status = 0;
+                ch376->command_status = CH376_RET_ABORT;
+                return 0;
+            }
+
+                // back to root?
             if(ch376->cmd_data.CMD_FileName[i] == '/')
             {
                 dbg_printf("[WRITE][COMMAND][CH376_CMD_FILE_OPEN] opening root directory\n");
