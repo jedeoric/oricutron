@@ -1522,6 +1522,7 @@ static int check_char(char c)
 {
     switch(c)
     {
+        case '.':
         case ' ':
         case '!': case '#': case '$':
         case '%': case '&': case '\'':
@@ -2142,14 +2143,17 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
         if(ch376->root_dir_lock)
         {
             int i = 0;
-
-            if (check_char(ch376->cmd_data.CMD_FileName[i]) == -1)
+            int j = 0;
+            for (j=0; j < 8+3+1+1; j++)
             {
-                dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[i]);
-                printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[i]);
-                ch376->interface_status = 0;
-                ch376->command_status = CH376_RET_ABORT;
-                return 0;
+                if (check_char(ch376->cmd_data.CMD_FileName[j]) == -1)
+                {
+                    dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[j]);
+                    printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[j]);
+                    ch376->interface_status = 0;
+                    ch376->command_status = CH376_RET_ABORT;
+                    return 0;
+                }
             }
 
             if (strlen(ch376->cmd_data.CMD_FileName) > 8+3+1+1) // 8.3 + EOS
