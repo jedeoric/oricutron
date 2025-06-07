@@ -326,8 +326,6 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 
 /* /// "Amiga system functions" */
 
-#define DEBUG_CH376 1
-
 #ifdef DEBUG_CH376
 #include <clib/debug_protos.h>
 #define dbg_printf kprintf
