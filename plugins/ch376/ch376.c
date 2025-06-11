@@ -61,6 +61,23 @@ extern struct Library *SysBase;
 #error "FixMe!"
 #endif
 
+
+#include "../../system.h"
+#include "../../6502.h"
+#include "../../via.h"
+#include "../../8912.h"
+#include "../../gui.h"
+#include "../../disk.h"
+#include "../../monitor.h"
+#include "../../6551.h"
+
+
+#include "../../machine.h"
+
+// Pour les fonction de lecture du fichier de configuration
+#include "../../main.h"
+
+#include "plugin.h"
 #include "ch376.h"
 
 /* /// */
@@ -2222,7 +2239,7 @@ CH376_U8 ch376_read_data_port(struct ch376 *ch376)
 
 /* /// "CH376 public write command port" */
 
-void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
+void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command, struct expansion_bus *oric_bus)
 {
     dbg_printf(">> [WRITE][COMMAND] Write command &%02x status &%02x\n", command, ch376->command_status);
 
@@ -2346,10 +2363,16 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
             int j = 0;
             for (j = 0; j < 8+3+1+1; j++)
             {
+                if (ch376->cmd_data.CMD_FileName[j] == '\0')
+                {
+                    // End of string
+                    break;
+                }
+
                 if (check_fat32_char(ch376->cmd_data.CMD_FileName[j]) == -1)
                 {
-                    dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[j]);
-                    printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[j]);
+                    dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d/current 6502 PC : 0x%x\n", ch376->cmd_data.CMD_FileName[j], oric_bus->cpu->lastpc);
+                    printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_OPEN] error: invalid character in file name : %d/current 6502 PC : 0x%x\n", ch376->cmd_data.CMD_FileName[j], oric_bus->cpu->lastpc);
                     ch376->interface_status = 0;
                     ch376->command_status = CH376_RET_ABORT;
                     break;
@@ -2464,10 +2487,15 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
         if(ch376->root_dir_lock)
         {
             int i = 0;
-
             int j = 0;
             for (j=0; j < 8+3+1+1; j++)
             {
+                if (ch376->cmd_data.CMD_FileName[j] == '\0')
+                {
+                    // End of string
+                    break;
+                }
+
                 if (check_fat32_char(ch376->cmd_data.CMD_FileName[j]) == -1)
                 {
                     dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_FILE_CREATE] error: invalid character in file name : %d\n", ch376->cmd_data.CMD_FileName[j]);
@@ -2545,8 +2573,14 @@ void ch376_write_command_port(struct ch376 *ch376, CH376_U8 command)
             CH376_LOCK created_dir_lock;
             CH376_FILE existing_file;
             int i = 0;
-
             int j = 0;
+
+            if (ch376->cmd_data.CMD_FileName[j] == '\0')
+            {
+                // End of string
+                break;
+            }
+
             for (j = 0; j < 8+3+1+1; j++)
             {
                 if (check_fat32_char(ch376->cmd_data.CMD_FileName[j]) == -1)
@@ -2827,7 +2861,7 @@ file_enum_go:
 
 /* /// "CH376 public write data port" */
 
-void ch376_write_data_port(struct ch376 *ch376, CH376_U8 data)
+void ch376_write_data_port(struct ch376 *ch376, CH376_U8 data, struct expansion_bus *oric_bus)
 {
   dbg_printf(">> [WRITE][DATA] Write data &%02x status &%02x\n", data, ch376->command_status);
 
@@ -2906,6 +2940,17 @@ void ch376_write_data_port(struct ch376 *ch376, CH376_U8 data)
 
     case CH376_CMD_SET_FILE_NAME:
         dbg_printf("[WRITE][DATA][CH376_CMD_SET_FILE_NAME] got file name character \"%c\" (&%02x) for position %d\n", data, data, ch376->pos_rw_in_cmd_data);
+        // protect against invalid characters
+
+        if (check_fat32_char(data) == -1)
+        {
+            dbg_printf("[PANIC][WRITE][COMMAND][CH376_CMD_SET_FILE_NAME] error: invalid character in file name : %d/current 6502 PC : 0x%x\n", data, oric_bus->cpu->lastpc);
+            printf("[PANIC][WRITE][COMMAND][CH376_CMD_SET_FILE_NAME] error: invalid character in file name : %d/current 6502 PC : 0x%x\n", data, oric_bus->cpu->lastpc);
+            ch376->interface_status = 0;
+            ch376->command_status = CH376_RET_ABORT;
+            break;
+        }
+
         // protect buffer overflow
         if(ch376->pos_rw_in_cmd_data < sizeof(ch376->cmd_data.CMD_FileName))
         {
