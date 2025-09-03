@@ -682,32 +682,32 @@ SDL_bool SDL_COMPAT_IsMainWindow(SDL_Event *event)
   switch (event->type)
   {
     case SDL_WINDOWEVENT:
-      fprintf(stderr, "IsMainWindow, type = WINDOWEVENT\n");
+      // fprintf(stderr, "IsMainWindow, type = WINDOWEVENT\n");
       return (event->window.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
 
     case SDL_MOUSEMOTION:
-      fprintf(stderr, "IsMainWindow, type = MOUSEMOTION\n");
+      // fprintf(stderr, "IsMainWindow, type = MOUSEMOTION\n");
       return (event->motion.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-      fprintf(stderr, "IsMainWindow, type = MOUSEBUTTON\n");
+      // fprintf(stderr, "IsMainWindow, type = MOUSEBUTTON\n");
       return (event->button.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
 
     case SDL_KEYDOWN:
     case SDL_KEYUP:
-      fprintf(stderr, "IsMainWindow, type = KEY\n");
+      // fprintf(stderr, "IsMainWindow, type = KEY\n");
       return (event->key.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
 
     case SDL_TEXTEDITING:
-      fprintf(stderr, "IsMainWindow, type = TEXTEDITING\n");
+      // fprintf(stderr, "IsMainWindow, type = TEXTEDITING\n");
       return (event->edit.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
 
     case SDL_TEXTINPUT:
-      fprintf(stderr, "IsMainWindow, type = TEXTINPUT\n");
+      // fprintf(stderr, "IsMainWindow, type = TEXTINPUT\n");
       return (event->text.windowID == g_windowID) ? SDL_TRUE : SDL_FALSE;
   }
-  fprintf(stderr, "IsMainWindow, type = %d\n", event->type);
+  // fprintf(stderr, "IsMainWindow, type = %d\n", event->type);
   return SDL_FALSE;
 }
 

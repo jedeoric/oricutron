@@ -171,10 +171,13 @@ Uint8 plugin_read(struct expansion_bus *oric_bus, SDL_bool fBank, unsigned int i
                 return ch376_read_data_port(userdata[instance]);
             }
             else
-                return ch376_read_data_port(userdata[instance]);
+                return (Uint8)(0xff);
         // CH376_ORIC_EXTENSION_COMMAND_PORT
         case 1:
-            return ch376_read_command_port(userdata[instance]);
+            if (run)
+                return ch376_read_command_port(userdata[instance]);
+            else
+                return (Uint8)(userdata_old[instance]->command);
 
         default:
             dbg_printf("CH376 READ: bad address $%04x\n", addr);
