@@ -27,10 +27,6 @@
 unsigned char KERNEL_MAX_NUMBER_OF_MALLOC = 9;
 unsigned char KERNEL_MALLOC_FREE_CHUNK_MAX = 5;
 
-
-
-
-
 // From periph.h
 extern int periph_find_by_name(char *name);
 
@@ -70,13 +66,13 @@ unsigned int plugin_instances = 0;
 
 #include "orixdebug.h"
 
-
 void mon_orixdebug_status(struct textzone *ptz, unsigned int instance, int pos_state, int y)
 {
     int i = 0;
     i = y;
 
 }
+
 
 unsigned int orixdebug_create(struct machine *oric)
 {
@@ -97,6 +93,12 @@ unsigned int orixdebug_create(struct machine *oric)
             free(userdata[plugin_instances]);
             return 0;
         }
+
+
+        // pthread_t gtk_thread;
+        // pthread_create(&gtk_thread, NULL, run_gtk, NULL);
+
+
 
         return ++plugin_instances;
     }
@@ -127,14 +129,23 @@ SDL_bool orixdebug_reset(struct expansion_bus *oric_bus, unsigned int instance )
 
 void mon_orixdebug_update(struct textzone *ptz, unsigned int instance, Uint16 base_addr, SDL_bool oldvalid)
 {
-    int i;
+    int i, j = 0;
+
+    // Oorix const
+    int KERNEL_MAX_FP_PER_PROCESS = 2;
+    int PATH_CURRENT_MAX_LEVEL = 4;
+    int MAX_LENGTH_OF_FILES = 8+3+1+1;
+    int KERNEL_MAX_PROCESS = 4;
+    int KERNEL_USERZP_SAVE_LENGTH = 16;
+    int KERNEL_MAX_LENGTH_COMMAND = 8;
+    int KERNEL_LENGTH_MAX_CMDLINE = 37;
+
     int MALLOC_BUSY_SIZE_LOW = 0x570;
     int MALLOC_BUSY_SIZE_HIGH = 0x567;
     int MALLOC_BUSY_BEGIN_HIGH = 0x539;
     int MALLOC_BUSY_END_HIGH = 0x54b;
     int MALLOC_BUSY_BEGIN_LOW = 0x542;
     int MALLOC_BUSY_END_LOW = 0x554;
-    // int KERNEL_MAX_NUMBER_OF_MALLOC = 0x9;
     int MALLOC_FREE_SIZE_HIGH = 0x2ba;
     int MALLOC_FREE_SIZE_LOW = 0x2bf;
     int MALLOC_FREE_BEGIN_HIGH = 0x52a;
@@ -142,6 +153,42 @@ void mon_orixdebug_update(struct textzone *ptz, unsigned int instance, Uint16 ba
     int MALLOC_FREE_END_HIGH = 0x534;
     int MALLOC_FREE_END_LOW = 0x52f;
 
+    int kernel_process_kernel_process_struct_kernel_fd_opened = 0x58e;
+    int kernel_process_kernel_process_struct_fp_ptr = 0x588;
+    int kernel_process = 0x579;
+    int max_number_of_fp = 2;
+    int ptr_fp = 0;
+    int ptr_process = 0;
+    int f_path = 3;
+    int ppid;
+
+
+
+    int KERNEL_MAX_PATH_LENGTH;
+
+    int cwd_str;
+    int cmdline;
+
+    int begin_malloc = 0;
+    int end_malloc = 0;
+    int size_malloc = 0;
+
+
+    int kernel_one_process_struct_ptr_low;
+    int kernel_one_process_struct_ptr_high;
+
+    int found = 0;
+
+
+
+    KERNEL_MAX_PATH_LENGTH = 9 * PATH_CURRENT_MAX_LEVEL + MAX_LENGTH_OF_FILES;
+    kernel_one_process_struct_ptr_low = kernel_process + KERNEL_MAX_PROCESS + 1;
+    kernel_one_process_struct_ptr_high = kernel_one_process_struct_ptr_low + KERNEL_MAX_PROCESS;
+    cwd_str = KERNEL_MAX_LENGTH_COMMAND + 1;
+
+
+    cmdline = cwd_str + KERNEL_MAX_PATH_LENGTH +KERNEL_MAX_FP_PER_PROCESS * 2 + KERNEL_USERZP_SAVE_LENGTH;
+    ppid = cmdline + KERNEL_LENGTH_MAX_CMDLINE;
 
     base_addr = base_addr; // gcc [-Wunused-parameter]
 
@@ -149,20 +196,113 @@ void mon_orixdebug_update(struct textzone *ptz, unsigned int instance, Uint16 ba
         return;
 
     instance--;
+    j = 0;
+    printf("############################################\n");
+    printf("#            Restarting ORIX debug         #\n");
+    printf("############################################\n");
 
+
+    int *process_array = (int *)malloc(KERNEL_MAX_PROCESS * sizeof(int));
+    printf("########################## PROCESS informations\n");
+    for (i = 0; i < KERNEL_MAX_PROCESS; i++)
+    {
+        ptr_process = userdata[instance]->mem[kernel_one_process_struct_ptr_low + i ] + (userdata[instance]->mem[kernel_one_process_struct_ptr_high + i] * 256);
+        printf("PID %d (offset of allocated struct : 0x%x)", i, ptr_process);
+        j = 0;
+        printf(" PATH : ");
+        while ( userdata[instance]->mem[ptr_process + j + cwd_str ] != '\0')
+        {
+            printf("%c", userdata[instance]->mem[ptr_process + j  + cwd_str ]);
+            j++;
+        }
+
+        j = 0;
+        printf(" commandline : '");
+        while ( userdata[instance]->mem[ptr_process + j + cmdline ] != '\0')
+        {
+            printf("%c", userdata[instance]->mem[ptr_process + j  + cmdline ]);
+            j++;
+        }
+        printf("'");
+
+        printf("\n");
+        process_array[i] = ptr_process;
+    }
+
+
+    int *fp_array = (int *)malloc(max_number_of_fp * sizeof(int));
+    printf("########################## Filepointers informations\n");
+    printf("Current kernel_fd_opened (ch376) : %d\n", userdata[instance]->mem[kernel_process_kernel_process_struct_kernel_fd_opened]);
+    for (i = 0; i < max_number_of_fp; i++)
+    {
+        ptr_fp = userdata[instance]->mem[kernel_process_kernel_process_struct_fp_ptr + i*2  ] + (userdata[instance]->mem[kernel_process_kernel_process_struct_fp_ptr + 1 + i*2 ] * 256);
+        printf("ptr fp %d (offset of allocated struct : 0x%x) ", i, ptr_fp);
+        j = 0;
+        fp_array[i] = ptr_fp;
+        if (ptr_fp != 0)
+        {
+            printf("f_path: ");
+            while ( userdata[instance]->mem[ptr_fp + j + f_path] != '\0')
+            {
+                printf("%c", userdata[instance]->mem[ptr_fp + j + f_path]);
+                j++;
+            }
+
+        }
+        printf("\n");
+    }
+
+    printf("########################## MALLOC (allocated memory)\n");
     for (i = 0; i < KERNEL_MALLOC_FREE_CHUNK_MAX; i++)
         if ( userdata[instance]->mem[MALLOC_FREE_BEGIN_HIGH + i] != 0 )
         {
             printf("FREE #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_FREE_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_FREE_BEGIN_LOW + i] , userdata[instance]->mem[MALLOC_FREE_END_HIGH + i], userdata[instance]->mem[MALLOC_FREE_END_LOW + i]);
-            my_tzprintfpos( ptz, 2,  i + 3, "FREE #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_FREE_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_FREE_BEGIN_LOW + i] , userdata[instance]->mem[MALLOC_FREE_END_HIGH + i], userdata[instance]->mem[MALLOC_FREE_END_LOW + i]);
+            my_tzprintfpos( ptz, 2,  j + 3, "FREE #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_FREE_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_FREE_BEGIN_LOW + i] , userdata[instance]->mem[MALLOC_FREE_END_HIGH + i], userdata[instance]->mem[MALLOC_FREE_END_LOW + i]);
+            j++;
         }
 
     for (i = 0; i < KERNEL_MAX_NUMBER_OF_MALLOC; i++)
         if ( userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i] != 0 )
         {
-            printf("BUSY #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_BEGIN_LOW + i], userdata[instance]->mem[MALLOC_BUSY_END_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_END_LOW + i]);
-            my_tzprintfpos( ptz, 2,  i + 4, "BUSY #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_BEGIN_LOW + i], userdata[instance]->mem[MALLOC_BUSY_END_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_END_LOW + i]);
+            found = 0;
+            begin_malloc = userdata[instance]->mem[MALLOC_BUSY_BEGIN_LOW + i] + userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i] * 256;
+
+            printf("BUSY #%02X%02X:#%02X%02X", userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_BEGIN_LOW + i], userdata[instance]->mem[MALLOC_BUSY_END_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_END_LOW + i]);
+            for (j = 0; j < max_number_of_fp; j++)
+            {
+                if (begin_malloc == fp_array[j])
+                {
+                    printf(" fp:");
+                    int t = 0;
+                    while ( userdata[instance]->mem[begin_malloc + t + f_path] != '\0')
+                    {
+                        printf("%c", userdata[instance]->mem[begin_malloc + t + f_path]);
+                        t++;
+                    }
+                    found = 1;
+                }
+
+            }
+            // Match pid
+            for (j = 0; j < KERNEL_MAX_PROCESS; j++)
+            {
+                if (begin_malloc == process_array[j])
+                {
+                    printf(" PID %d struct ", j);
+                    found = 1;
+                }
+
+            }
+
+            if (found == 0) printf(" Specific malloc process");
+
+            printf("\n");
+            my_tzprintfpos( ptz, 2,  j + 3, "BUSY #%02X%02X:#%02X%02X\n", userdata[instance]->mem[MALLOC_BUSY_BEGIN_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_BEGIN_LOW + i], userdata[instance]->mem[MALLOC_BUSY_END_HIGH + i], userdata[instance]->mem[MALLOC_BUSY_END_LOW + i]);
+            j++;
         }
+
+
+
 
 }
 
@@ -231,7 +371,7 @@ struct PLUGIN plugin = { "orixdebug",
                 // 0 : aucun device
                 // PLG_DEVICE  : 1 => indique un périphérique dont l'adresse est dans la page 3
                 // PLG_BANK    : 2 => indique un périphérique dont l'adresse est au delà de $BFFF
-                // PLG_MULTI   : 4 => indique que le périphérique possède plusieurs adresses non 
+                // PLG_MULTI   : 4 => indique que le périphérique possède plusieurs adresses non
                 0,
                 NULL,
                 orixdebug_create,
