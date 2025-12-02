@@ -108,6 +108,7 @@ struct BOARD {
     // 0x0342 - 0x0343
     unsigned char t_register;                   // ?xRx xVVV
     unsigned char t_banking_register;
+    char main_usb_device[100];
 };
 
 // Tableau: instances
@@ -804,6 +805,11 @@ SDL_bool config_load(struct BOARD *twilighte)
                     return SDL_FALSE;
                 }
                 dbg_printf(" done.\n");
+            }
+
+            if (!read_config_string(line, "main_usb_device", &twilighte->main_usb_device, 1024))
+            {
+                strcpy(twilighte->main_usb_device, "USB_MASS_STORAGE_CLASS");
             }
 
             if (read_config_string(line, tbtmpram, bankfile, 1024))
