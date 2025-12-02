@@ -2253,12 +2253,12 @@ CH376_U8 ch376_read_data_port(struct ch376 *ch376)
                 ch376->hid_mouse_deltax = (signed char)x;
                 ch376->hid_mouse_deltay = (signed char)y;
 
-
-                ch376->usb_data[0] = 1; // Must be checked under real ch376, which value it will return
+                if (ch376->hid_mouse_deltax == 0 && ch376->hid_mouse_deltay == 0)
+                    ch376->usb_data[0] = 0; // No movement
+                else
+                    ch376->usb_data[0] = 1; // Must be checked under real ch376, which value it will return
                 ch376->usb_data[1] = 0; // button
-                unsigned char x8 = ch376->hid_mouse_deltax;
-                ch376->usb_data[2] = x8; // X
-                unsigned char y8 = y & 0xFF;
+                ch376->usb_data[2] = ch376->hid_mouse_deltax; // X
                 ch376->usb_data[3] = ch376->hid_mouse_deltay; // Y
                 ch376->usb_data[4] = 0; // wheel
                 data_out = ch376->usb_data[0];
@@ -3364,11 +3364,10 @@ struct ch376 * ch376_create(void *user_data)
             ch376->current_usb_device_to_set_adress = 0;
             ch376->issue_tkn_is_set = ISSUE_TKN_IS_NOT_SET;
             //Connect an usb mass storage
-            //ch376->device_connected_to_usb_port = USB_MASS_STORAGE_CLASS;
+            ch376->device_connected_to_usb_port = USB_MASS_STORAGE_CLASS;
             // Connect a mouse on usb port
-            ch376->device_connected_to_usb_port = USB_MOUSE_CLASS;
+            //ch376->device_connected_to_usb_port = USB_MOUSE_CLASS;
             ch376->usbdevices[0].USBDEVICE_Is_Connected = USBDEVICE_IS_CONNECTED;
-
 
             ch376->hid_mouse_deltax = 0;
             ch376->hid_mouse_deltay = 0;
