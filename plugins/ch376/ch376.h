@@ -105,7 +105,7 @@ typedef struct { void *dummy; } CH376_CONTEXT;
 /* /// */
 
 
-typedef struct {
+struct usb_device_descriptor_t {
     uint8_t bLength;
     uint8_t bDescriptorType;
     uint16_t bcdUSB;
@@ -120,7 +120,7 @@ typedef struct {
     uint8_t iProduct;
     uint8_t iSerialNumber;
     uint8_t bNumConfigurations;
-} usb_device_descriptor_t;
+};
 
 
 /* /// "CH376 public I/O API" */

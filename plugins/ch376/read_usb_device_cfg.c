@@ -6,11 +6,13 @@
 
 #define MAX_LINE_LENGTH 256
 
-void parse_hex(const char *hex_str, uint8_t *buffer, int max_len) {
+void parse_hex(const char *hex_str, uint8_t *buffer, int max_len)
+{
     char *ptr = strdup(hex_str);
     char *token = strtok(ptr, " ");
     int i = 0;
-    while (token != NULL && i < max_len) {
+    while (token != NULL && i < max_len)
+    {
         buffer[i++] = (uint8_t)strtol(token, NULL, 16);
         token = strtok(NULL, " ");
     }
@@ -19,16 +21,22 @@ void parse_hex(const char *hex_str, uint8_t *buffer, int max_len) {
 
 
 
-void parse_usb_cfg(const char *filename, usb_device_descriptor_t dev_desc) {
+void parse_usb_cfg(const char *filename, struct usb_device_descriptor_t *device)
+{
     FILE *file = fopen(filename, "r");
 
     char cwd[PATH_MAX]; // PATH_MAX est défini dans <limits.h>
 
 
-    if (file == NULL) {
+    if (file == NULL)
+    {
         printf("[CH376 plugin] Erreur ouverture fichier %s\n", filename);
         exit(1);
         return;
+    }
+    else
+    {
+        printf("%s found. Reading descriptor\n", filename);
     }
 
     char line[MAX_LINE_LENGTH];
@@ -36,21 +44,41 @@ void parse_usb_cfg(const char *filename, usb_device_descriptor_t dev_desc) {
     uint8_t report_desc[64] = {0};
     int config_desc_len = 0;
     int report_desc_len = 0;
+    int j = 0;
 
-    while (fgets(line, sizeof(line), file)) {
+    while (fgets(line, sizeof(line), file))
+    {
         if (line[0] == ';' || line[0] == '\n')
             continue;
 
-        if (strstr(line, "[USB_DEVICE_DESCRIPTOR]")) {
-            while (fgets(line, sizeof(line), file) && line[0] != '[') {
-                if (sscanf(line, "bLength = %hhx", &dev_desc.bLength) == 1) continue;
-                if (sscanf(line, "bDescriptorType = %hhx", &dev_desc.bDescriptorType) == 1) continue;
-                if (sscanf(line, "bcdUSB = %hx", &dev_desc.bcdUSB) == 1) continue;
-                if (sscanf(line, "bDeviceClass = %hhx", &dev_desc.bDeviceClass) == 1) continue;
-                if (sscanf(line, "idVendor = %hx", &dev_desc.idVendor) == 1) continue;
-                if (sscanf(line, "idProduct = %hx", &dev_desc.idProduct) == 1) continue;
+        if (strstr(line, "[USB_DEVICE_DESCRIPTOR]"))
+        {
+            while (fgets(line, sizeof(line), file) && line[0] != '[')
+            {
+                if (sscanf(line, "bLength=%hhx", &device->bLength) == 1)
+                {
+                    continue;
+                }
+                if (sscanf(line, "bDescriptorType=%hhx", &device->bDescriptorType) == 1) continue;
+                if (sscanf(line, "bcdUSB=%hx", &device->bcdUSB) == 1) continue;
+                //if (sscanf(line, "bDeviceClass=0x%x", &device->bDeviceClass) == 1) 
+                if (strstr(line, "bDeviceClass=") == line)
+                {
+                    char *egal = strchr(line, '=');
+                    if (egal != NULL)
+                    {
+                        int valeur;
+                        sscanf(egal + 1, "%x", &device->bDeviceClass);
+                    }
+                };
+
+                if (sscanf(line, "idVendor=%hx", &device->idVendor) == 1) continue;
+                if (sscanf(line, "idProduct=%hx", &device->idProduct) == 1) continue;
                 // ... (autres champs)
-            }
+
+                j++;
+        }
+        printf("USB_DEVICE_DESCRIPTOR found, length found : %d\n", device->bLength);
         }
         else if (strstr(line, "[USB_HID_REPORT_DESCRIPTOR]")) {
             char *ptr = strstr(line, "Data = ");

@@ -10,7 +10,7 @@
  ** ch376.c *********************************************************/
 /*
  Changes:
-
+ 20.12.2025 - Add descr usb management
  02.12.2025 - Jede: Add config ch376 file to specify connected device
  23.11.2025 - Jede: Add usb devices management
  10.06.2025 - Jede: Fix bug when a char is not normalized for FAT32 operation (open, create, delete file/dir)
@@ -29,7 +29,7 @@
 
 
 
-#define DEBUG_CH376 1
+//#define DEBUG_CH376 1
 
 #define CONFIG_FILE "plugins/ch376.cfg"
 
@@ -123,7 +123,7 @@ extern struct Library *SysBase;
 #include "plugin.h"
 #include "ch376.h"
 
-extern void parse_usb_cfg(const char *filename, usb_device_descriptor_t *dev_desc);
+extern void parse_usb_cfg(const char *filename, struct usb_device_descriptor_t *device);
 
 /* /// */
 
@@ -373,12 +373,12 @@ struct MountInfo
     char     MOUNT_ProductRevStr[4];
 };
 
-
 struct UsbDevice
 {
     CH376_U8 USBDEVICE_Address;
     CH376_U8 USBDEVICE_Config;
     CH376_U8 USBDEVICE_Is_Connected;
+    struct usb_device_descriptor_t main_descr;
 };
 
 struct DiskQuery
@@ -459,9 +459,10 @@ struct ch376
     CH376_U8 hid_mouse_deltax;
     CH376_U8 hid_mouse_deltay;
     CH376_U8 descriptor_type; // for CH376_CMD_GET_DESCR
-    usb_device_descriptor_t usb_main_desc;
+    struct usb_device_descriptor_t usb_main_device;
     CH376_U8 pos_in_usb_descriptor;
-    
+    CH376_U8 command_performed;
+
 
 };
 
@@ -480,7 +481,7 @@ static void file_write_chunk(struct ch376 *ch376);
 static CH376_BOOL pattern_match(const char *pattern, const char *str);
 static const char * normalize_pattern(const char *pattern, char *normalized_pattern);
 
-SDL_bool config_load_ch376(struct ch376 *ch376);
+SDL_bool config_load_ch376(struct ch376 *ch376, int index);
 
 
 /* /// */
@@ -1802,13 +1803,13 @@ static CH376_S32 system_get_file_offset(CH376_CONTEXT *context, CH376_FILE file)
 #endif
 
 
-SDL_bool config_load_ch376(struct ch376 *ch376)
+SDL_bool config_load_ch376(struct ch376 *ch376, int usb_addr)
 {
     FILE* f;
 
     char* result;
     char line[1024];
-    char main_usb_connected_device[100];
+    char main_usb_connected_device[200];
 
 
     f = fopen(CONFIG_FILE, "r");
@@ -1827,16 +1828,14 @@ SDL_bool config_load_ch376(struct ch376 *ch376)
           // FIXME: do something to silence the compiler warning ...
         }
 
-
-        if (read_config_string(line, "device_connected_to_usb_port", main_usb_connected_device, 100))
+        if (read_config_string(line, "device_connected_to_usb_port", main_usb_connected_device, 200))
         {
             if (strcmp(main_usb_connected_device, "USB_MASS_STORAGE_CLASS") == 0)
             {
                 ch376->device_connected_to_usb_port = USB_MASS_STORAGE_CLASS;
                 ch376->usbdevices[0].USBDEVICE_Is_Connected = USBDEVICE_IS_CONNECTED;
                 dbg_printf("CH376 usb connected device : USB_MASS_STORAGE_CLASS\n");
-
-                parse_usb_cfg("plugins/usb_device_mass_storage.cfg", &ch376->usb_main_desc);
+                parse_usb_cfg("plugins/usb_device_mass_storage.cfg", &ch376->usb_main_device);
             }
             else if (strcmp(main_usb_connected_device, "USB_MOUSE_CLASS") == 0)
             {
@@ -1844,7 +1843,7 @@ SDL_bool config_load_ch376(struct ch376 *ch376)
                 ch376->device_connected_to_usb_port = USB_MOUSE_CLASS;
                 ch376->usbdevices[0].USBDEVICE_Is_Connected = USBDEVICE_IS_CONNECTED;
 
-                parse_usb_cfg("plugins/usb_device_hub.cfg", &ch376->usb_main_desc);
+                parse_usb_cfg("plugins/usb_device_hub.cfg", &ch376->usb_main_device);
                 ch376->hid_mouse_deltax = 0;
                 ch376->hid_mouse_deltay = 0;
             }
@@ -1852,14 +1851,14 @@ SDL_bool config_load_ch376(struct ch376 *ch376)
             else
             {
                 dbg_printf("CH376 usb connected device : USB_MASS_STORAGE_CLASS\n");
-                ch376->device_connected_to_usb_port = USB_NO_CONNECTED_DEVICE;
-                ch376->usbdevices[0].USBDEVICE_Is_Connected = USBDEVICE_IS_NOT_CONNECTED;
-                parse_usb_cfg("plugins/usb_device_mass_storage.cfg", &ch376->usb_main_desc);
+                ch376->device_connected_to_usb_port = USB_MASS_STORAGE_CLASS;
+                ch376->usbdevices[0].USBDEVICE_Is_Connected = USBDEVICE_IS_CONNECTED;
+                parse_usb_cfg("plugins/usb_device_mass_storage.cfg", &ch376->usb_main_device);
             }
         }
     }
     fclose(f);
-
+    printf("USB_DEVICE_DESCRIPTOR found, length found : %d\n", ch376->usb_main_device.bLength);
     return SDL_TRUE;
 }
 
@@ -2133,6 +2132,75 @@ dbg_printf("\n*** read count/ %d\n", ch376->buffer_read_count);
     }
 }
 
+unsigned char read_usb_descriptor(struct ch376 *ch376)
+{
+    unsigned char data_out;
+    switch (ch376->pos_in_usb_descriptor)
+    {
+        case 0:
+            data_out = ch376->usb_main_device.bLength;
+            break;
+        case 1:
+            data_out = ch376->usb_main_device.bDescriptorType;
+            break;
+        case 2:
+            data_out = ch376->usb_main_device.bcdUSB & 0x00FF;
+            break;
+        case 3:
+            data_out = (ch376->usb_main_device.bcdUSB >> 8) & 0xFF;
+            break;
+        case 4:
+            data_out = ch376->usb_main_device.bDeviceClass;
+            break;
+        case 5:
+            data_out = ch376->usb_main_device.bDeviceSubClass;
+            break;
+        case 6:
+            data_out = ch376->usb_main_device.bDeviceProtocol;
+            break;
+        case 7:
+            data_out = ch376->usb_main_device.bMaxPacketSize0;
+            break;
+        case 8:
+            data_out = ch376->usb_main_device.idVendor & 0x00FF;
+            break;
+        case 9:
+            data_out = (ch376->usb_main_device.idVendor >> 8) & 0xFF;
+            break;
+        case 10:
+            data_out = ch376->usb_main_device.idProduct & 0x00FF;
+            break;
+        case 11:
+            data_out = (ch376->usb_main_device.idProduct >> 8) & 0xFF;
+            break;
+        case 12:
+            data_out = ch376->usb_main_device.bcdDevice & 0x00FF;
+            break;
+        case 13:
+            data_out = (ch376->usb_main_device.bcdDevice >> 8) & 0xFF;
+            break;
+        case 14:
+            data_out = ch376->usb_main_device.iManufacturer;
+            break;
+        case 15:
+            data_out = ch376->usb_main_device.iProduct;
+            break;
+        case 16:
+            data_out = ch376->usb_main_device.iSerialNumber;
+            break;
+        case 17:
+            data_out = ch376->usb_main_device.bNumConfigurations;
+            ch376->command_performed = CH376_CMD_NONE;
+            break;
+        default:
+            data_out = 0;
+    }
+    dbg_printf("[READ][DATA][CH376_CMD_RD_USB_DATA0][Descr] offset : %d value : %d\n", ch376->pos_in_usb_descriptor, data_out);
+    ch376->pos_in_usb_descriptor ++;
+    return data_out;
+}
+
+
 static void file_write_chunk(struct ch376 *ch376)
 {
     CH376_S32 bytes_to_write_now;
@@ -2251,6 +2319,26 @@ static CH376_BOOL pattern_match(const char *pattern, const char * file_name)
 
 /* /// */
 
+
+int return_index_from_usb_address(struct ch376 *ch376)
+{
+    // Returns the id of the devices which is ch376->current_device_address from all usbdevices
+    // Returns 0xFF if not found
+    int i;
+    for (i = 0; i < CH376_MAX_USB_DEVICES; i++) // We are looking device from 0 to max usb devices
+    {
+        if (ch376->usbdevices[i].USBDEVICE_Address == ch376->current_device_address && ch376->usbdevices[i].USBDEVICE_Is_Connected == USBDEVICE_IS_CONNECTED)
+            // Device found
+            return i;
+    }
+    // We found device, setting to device
+    if (i >= CH376_MAX_USB_DEVICES)
+    {
+        return 0xFF;
+    }
+
+}
+
 /* /// "CH376 public read command port" */
 
 CH376_U8 ch376_read_command_port(struct ch376 *ch376)
@@ -2341,9 +2429,18 @@ CH376_U8 ch376_read_data_port(struct ch376 *ch376)
             dbg_printf("Mass storage in usb port\n");
         }
 
+        if (ch376->device_connected_to_usb_port == USB_HUB_CLASS)
+        {
+            dbg_printf("Hub in usb main port\n");
+        }
+
         if (ch376->device_connected_to_usb_port != USB_MASS_STORAGE_CLASS && ch376->usb_mode == CH376_ARG_SET_USB_MODE_USB_HOST)
         {
-            if (ch376->pos_in_usb_data == 0)
+            if (ch376->command_performed == CH376_CMD_GET_DESCR)
+            {
+                data_out = read_usb_descriptor(ch376);
+            }
+            else if (ch376->pos_in_usb_data == 0)
             {
                 // Get mouse informations
                 int x, y;
@@ -2395,7 +2492,11 @@ CH376_U8 ch376_read_data_port(struct ch376 *ch376)
         // Mass storage
         else if (ch376->device_connected_to_usb_port == USB_MASS_STORAGE_CLASS || ch376->usb_mode == CH376_ARG_SET_USB_MODE_SD_HOST)
         {
-
+            if (ch376->command_performed == CH376_CMD_GET_DESCR)
+            {
+                data_out = read_usb_descriptor(ch376);
+            }
+            else
             if(ch376->nb_bytes_in_cmd_data)
             {
                 if(ch376->pos_rw_in_cmd_data == CMD_DATA_REQ_SIZE)
@@ -2443,84 +2544,7 @@ CH376_U8 ch376_read_data_port(struct ch376 *ch376)
         break;
 
     case CH376_CMD_GET_DESCR:
-
-        switch (ch376->pos_in_usb_descriptor) {
-                case 0:
-                    data_out = ch376->usb_main_desc.bLength;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 1:
-                    data_out = ch376->usb_main_desc.bDescriptorType;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 2:
-                    data_out = ch376->usb_main_desc.bcdUSB & 0x00FF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 3:
-                    data_out = (ch376->usb_main_desc.bcdUSB >> 8) & 0xFF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 4:
-                    data_out = ch376->usb_main_desc.bDeviceClass;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 5:
-                    data_out = ch376->usb_main_desc.bDeviceSubClass;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 6:
-                    data_out = ch376->usb_main_desc.bDeviceProtocol;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 7:
-                    data_out = ch376->usb_main_desc.bMaxPacketSize0;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 8:
-                    data_out = ch376->usb_main_desc.idVendor & 0x00FF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 9:
-                    data_out = (ch376->usb_main_desc.idVendor >> 8) & 0xFF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 10:
-                    data_out = ch376->usb_main_desc.idProduct & 0x00FF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 11:
-                    data_out = (ch376->usb_main_desc.idProduct >> 8) & 0xFF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 12:
-                    data_out = ch376->usb_main_desc.bcdDevice & 0x00FF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 13:
-                    data_out = (ch376->usb_main_desc.bcdDevice >> 8) & 0xFF;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 14:
-                    data_out = ch376->usb_main_desc.iManufacturer;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 15:
-                    data_out = ch376->usb_main_desc.iProduct;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 16:
-                    data_out = ch376->usb_main_desc.iSerialNumber;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                case 17:
-                    data_out = ch376->usb_main_desc.bNumConfigurations;
-                    ch376->pos_in_usb_descriptor ++;
-                    break;
-                default:
-                    data_out = 0;
-            }
-
+        // Dunno
         break;
 
     // Emulate CH376 bug which returns the 1st byte in data buffer
@@ -3184,7 +3208,8 @@ file_enum_go:
     case CH376_CMD_GET_DESCR:
         ch376->command = CH376_CMD_GET_DESCR;
         ch376->pos_in_usb_descriptor = 0;
-        dbg_printf("[WRITE][COMMAND][CH376_CMD_GET_DESCR] Waiting for data from data port\n");
+        ch376->command_performed = CH376_CMD_GET_DESCR;
+        dbg_printf("[WRITE][COMMAND][CH376_CMD_GET_DESCR] Waiting for id descriptor in data port\n");
         break;
 
     default:
@@ -3574,8 +3599,9 @@ struct ch376 * ch376_create(void *user_data)
             }
             ch376->current_usb_device_to_set_adress = 0;
             ch376->issue_tkn_is_set = ISSUE_TKN_IS_NOT_SET;
-            config_load_ch376(ch376);
-
+            // Load usb config with usb addr equal to 0, 0 is not the usb_addr but the index of the usbdevice
+            config_load_ch376(ch376, 0);
+            ch376->command_performed = CH376_CMD_NONE;
 
             ch376->current_device_address = 0;
             clear_structure(ch376);
